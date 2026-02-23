@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🍜 Tokyo Food Finder - Live GPS</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #ff6600, #ff9900);
+            padding: 12px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+        
+        .header h1 {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        
+        .filter-buttons {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .filter-btn {
+            background: rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .filter-btn.active {
+            background: white;
+            color: #ff6600;
+            border-color: white;
+        }
+        
+        .stats {
+            background: rgba(0,0,0,0.7);
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            margin-top: 5px;
+        }
+        
+        #map {
+            flex: 1;
+            width: 100%;
+        }
+        
+        .locate-btn {
+            position: absolute;
+            bottom: 120px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            border: 2px solid #ccc;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            font-size: 24px;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .locate-btn.active {
+            background: #4CAF50;
+            color: white;
+            border-color: #4CAF50;
+        }
+        
+        .leaflet-popup-content {
+            color: #333;
+            font-size: 14px;
+            min-width: 200px;
+        }
+        
+        .popup-name {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        
+        .popup-rating {
+            background: #ff6600;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        
+        .popup-category {
+            color: #666;
+            font-size: 12px;
+            margin: 3px 0;
+        }
+        
+        .popup-distance {
+            color: #2196F3;
+            font-weight: bold;
+            font-size: 13px;
+            margin: 5px 0;
+        }
+        
+        .popup-link {
+            display: inline-block;
+            margin-top: 5px;
+            color: #ff6600;
+            text-decoration: none;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🍜 Tokyo Food Finder - Live GPS</h1>
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-rating="3.4">All (3.4+)</button>
+            <button class="filter-btn" data-rating="3.7">Good (3.7+)</button>
+            <button class="filter-btn" data-rating="4.0">Great (4.0+)</button>
+            <button class="filter-btn" data-rating="4.3">Elite (4.3+)</button>
+        </div>
+        <div class="stats" id="stats">Loading...</div>
+    </div>
+    
+    <div id="map"></div>
+    <button class="locate-btn" id="locateBtn" title="Track my location">📍</button>
+    
+    <script>
+
+        const RESTAURANTS_DATA = {"restaurants": [{"id": "A1302_0", "name": "Nihonbashi Kakigaracho Sugita", "tabelog_rating": 4.67, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130204/13018162/", "category": "Suitengumae Sta. / Sushi", "lat": 35.68078, "lng": 139.738416}, {"id": "A1302_1", "name": "aca", "tabelog_rating": 4.66, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13249117/", "category": "Mitsukoshimae Sta. / Spanish", "lat": 35.68284, "lng": 139.746771}, {"id": "A1301_0", "name": "Sushi Ikkou", "tabelog_rating": 4.63, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13300481/", "category": "Higashi Ginza Sta. / Sushi", "lat": 35.696197, "lng": 139.750567}, {"id": "A1301_1", "name": "Sushi Arai", "tabelog_rating": 4.62, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13188186/", "category": "Higashi Ginza Sta. / Sushi", "lat": 35.698683, "lng": 139.753919}, {"id": "A1301_2", "name": "Ginza Shinohara", "tabelog_rating": 4.6, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13200949/", "category": "Ginza Itchome Sta. / Japanese Cuisine", "lat": 35.69223, "lng": 139.747348}, {"id": "A1301_3", "name": "Sushi Nanba Hibiya", "tabelog_rating": 4.54, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130102/13219857/", "category": "Hibiya Sta. / Sushi", "lat": 35.699167, "lng": 139.752086}, {"id": "A1301_4", "name": "Sawada", "tabelog_rating": 4.53, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13001043/", "category": "Ginza Sta. / Sushi", "lat": 35.695929, "lng": 139.761378}, {"id": "A1303_0", "name": "Suetomi", "tabelog_rating": 4.52, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13259485/", "category": "Japanese Cuisine", "lat": 35.663687, "lng": 139.749081}, {"id": "A1303_1", "name": "Sushi Akira", "tabelog_rating": 4.51, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13241432/", "category": "Hiro o Sta. / Sushi", "lat": 35.665326, "lng": 139.752872}, {"id": "A1303_2", "name": "PELLEGRINO", "tabelog_rating": 4.5, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13072775/", "category": "Hiro o Sta. / Italian", "lat": 35.655133, "lng": 139.738976}, {"id": "A1317_0", "name": "Sushi Takamitsu", "tabelog_rating": 4.48, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13128483/", "category": "Naka Meguro Sta. / Sushi", "lat": 35.666476, "lng": 139.705858}, {"id": "A1302_2", "name": "Nihonbashi Sonoji", "tabelog_rating": 4.47, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130204/13201969/", "category": "Ningyocho Sta. / Tempura", "lat": 35.675228, "lng": 139.747365}, {"id": "A1301_5", "name": "Ginza Ooishi", "tabelog_rating": 4.46, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13238352/", "category": "Ginza Itchome Sta. / French", "lat": 35.687916, "lng": 139.748189}, {"id": "A1301_6", "name": "L'OSIER", "tabelog_rating": 4.45, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13002607/", "category": "Ginza Sta. / French", "lat": 35.690894, "lng": 139.746235}, {"id": "A1302_3", "name": "SEZANNE", "tabelog_rating": 4.45, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130201/13256878/", "category": "Kyobashi Sta. / French", "lat": 35.669334, "lng": 139.732572}, {"id": "A1302_4", "name": "Tempura Asanuma", "tabelog_rating": 4.45, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13275655/", "category": "Nihombashi Sta. / Tempura", "lat": 35.677052, "lng": 139.74435}, {"id": "A1303_3", "name": "Gastronomy Joel Robuchon", "tabelog_rating": 4.43, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13009310/", "category": "Ebisu Sta. / French", "lat": 35.665369, "lng": 139.75049}, {"id": "A1303_4", "name": "Tori Chataro", "tabelog_rating": 4.43, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13157208/", "category": "Shibuya Sta. / Yakitori (Grilled chicken skewers)", "lat": 35.664589, "lng": 139.745014}, {"id": "A1301_7", "name": "Nikuya Tanaka", "tabelog_rating": 4.42, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13237628/", "category": "Ginza Sta. / Beef dishes, Japanese Cuisine", "lat": 35.689073, "lng": 139.746241}, {"id": "A1301_8", "name": "Mitaka", "tabelog_rating": 4.42, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130103/13228116/", "category": "Uchisaiwaicho Sta. / Japanese Cuisine", "lat": 35.698119, "lng": 139.75306}, {"id": "A1302_5", "name": "Chez Inno", "tabelog_rating": 4.42, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13000510/", "category": "Kyobashi Sta. / French", "lat": 35.671324, "lng": 139.746803}, {"id": "A1303_5", "name": "TACUBO", "tabelog_rating": 4.4, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130303/13109940/", "category": "Daikan yama Sta. / Italian", "lat": 35.664232, "lng": 139.750023}, {"id": "A1302_6", "name": "Isoda", "tabelog_rating": 4.38, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130204/13303109/", "category": "Ningyocho Sta. / Japanese Cuisine", "lat": 35.68284, "lng": 139.735802}, {"id": "A1302_7", "name": "Kizan", "tabelog_rating": 4.38, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13303152/", "category": "Mitsukoshimae Sta. / Japanese Cuisine", "lat": 35.67985, "lng": 139.746566}, {"id": "A1301_9", "name": "Kitagawa", "tabelog_rating": 4.37, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13275790/", "category": "Ginza Itchome Sta. / Japanese Cuisine, Tempura", "lat": 35.694958, "lng": 139.748485}, {"id": "A1301_10", "name": "Kawamura", "tabelog_rating": 4.37, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13016506/", "category": "Steak", "lat": 35.689613, "lng": 139.749115}, {"id": "A1301_11", "name": "Harutaka", "tabelog_rating": 4.35, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130103/13032283/", "category": "Shimbashi Sta. / Sushi", "lat": 35.686401, "lng": 139.760329}, {"id": "A1303_6", "name": "WASA", "tabelog_rating": 4.35, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13251804/", "category": "Ebisu Sta. / Chinese", "lat": 35.651887, "lng": 139.747912}, {"id": "A1301_12", "name": "Iyuki", "tabelog_rating": 4.33, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13030881/", "category": "Japanese Cuisine", "lat": 35.689102, "lng": 139.761207}, {"id": "A1301_13", "name": "ESqUISSE", "tabelog_rating": 4.31, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13142530/", "category": "Ginza Sta. / French", "lat": 35.696464, "lng": 139.757956}, {"id": "A1301_14", "name": "Les Saisons", "tabelog_rating": 4.31, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130102/13002294/", "category": "Hibiya Sta. / French", "lat": 35.693221, "lng": 139.749132}, {"id": "A1303_7", "name": "Eiki", "tabelog_rating": 4.31, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13230923/", "category": "Ebisu Sta. / Yakitori (Grilled chicken skewers)", "lat": 35.664127, "lng": 139.752401}, {"id": "A1301_15", "name": "Shimbashi Shimizu", "tabelog_rating": 4.3, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130103/13002892/", "category": "Shimbashi Sta. / Sushi", "lat": 35.699811, "lng": 139.748358}, {"id": "A1317_1", "name": "megriva", "tabelog_rating": 4.3, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13225445/", "category": "Naka Meguro Sta. / Italian", "lat": 35.654147, "lng": 139.705482}, {"id": "A1301_16", "name": "APICIUS", "tabelog_rating": 4.29, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130102/13000145/", "category": "Hibiya Sta. / French", "lat": 35.687848, "lng": 139.757636}, {"id": "A1301_17", "name": "ZURRIOLA", "tabelog_rating": 4.27, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13125046/", "category": "Ginza Sta. / Spanish", "lat": 35.694949, "lng": 139.758606}, {"id": "A1301_18", "name": "GINZA JOTAKI", "tabelog_rating": 4.27, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13267801/", "category": "Ginza Sta. / Chinese, Sichuan", "lat": 35.686331, "lng": 139.754191}, {"id": "A1302_8", "name": "ASAHINA Gastronome", "tabelog_rating": 4.27, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130203/13227385/", "category": "Kayabacho Sta. / French", "lat": 35.676132, "lng": 139.734405}, {"id": "A1303_8", "name": "LATURE", "tabelog_rating": 4.26, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13198692/", "category": "Omote Sando Sta. / French", "lat": 35.661003, "lng": 139.739669}, {"id": "A1303_9", "name": "Ebisu Yoroniku", "tabelog_rating": 4.26, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13211927/", "category": "Ebisu Sta. / Yakiniku (Japanese BBQ), Tripe", "lat": 35.652768, "lng": 139.751429}, {"id": "A1304_0", "name": "Bon.nu", "tabelog_rating": 4.25, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13184186/", "category": "Sangubashi Sta. / French, Steak, Cake", "lat": 35.682822, "lng": 139.699515}, {"id": "A1317_2", "name": "Sushi Kimura", "tabelog_rating": 4.25, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131708/13026584/", "category": "Futako Tamagawa Sta. / Sushi", "lat": 35.656763, "lng": 139.696222}, {"id": "A1301_19", "name": "subin", "tabelog_rating": 4.23, "google_rating": null, "address": "Chiyoda", "url": "https://s.tabelog.com/en/tokyo/A1301/A130101/13287203/", "category": "Ginza Sta. / Shabu shabu (Japanese hotpot), Sukiyaki (Japanese sweet soy hotpot), Tonkatsu (Pork cutlet)", "lat": 35.691719, "lng": 139.752186}, {"id": "A1317_3", "name": "Sushi Tsubomi", "tabelog_rating": 4.2, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13221782/", "category": "Naka Meguro Sta. / Sushi", "lat": 35.65485, "lng": 139.707906}, {"id": "A1302_9", "name": "THE PIZZA BAR ON 38TH", "tabelog_rating": 4.18, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13167573/", "category": "Mitsukoshimae Sta. / Pizza, Italian", "lat": 35.677782, "lng": 139.74162}, {"id": "A1303_10", "name": "Sumibi Yaki Yuji", "tabelog_rating": 4.18, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13001794/", "category": "Shibuya Sta. / Tripe, Yakiniku (Japanese BBQ)", "lat": 35.662705, "lng": 139.750299}, {"id": "A1317_4", "name": "caillou", "tabelog_rating": 4.16, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131710/13279829/", "category": "Nishi Koyama Sta. / French, Bistro", "lat": 35.666496, "lng": 139.698293}, {"id": "A1317_5", "name": "luogo", "tabelog_rating": 4.14, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131703/13279663/", "category": "Jiyugaoka Sta. / Italian, Restaurants, Pasta", "lat": 35.658829, "lng": 139.698135}, {"id": "A1317_6", "name": "Ranmaru", "tabelog_rating": 4.13, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131710/13217903/", "category": "Fudo Mae Sta. / Sushi", "lat": 35.657225, "lng": 139.698715}, {"id": "A1303_11", "name": "MONOLITH", "tabelog_rating": 4.12, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13108686/", "category": "Shibuya Sta. / French", "lat": 35.655988, "lng": 139.744191}, {"id": "A1302_10", "name": "Tempura Fukamachi", "tabelog_rating": 4.11, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13004105/", "category": "Kyobashi Sta. / Tempura", "lat": 35.674923, "lng": 139.737576}, {"id": "A1302_11", "name": "Japanese Cuisine Yamazaki", "tabelog_rating": 4.11, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13287123/", "category": "Takaracho Sta. / Japanese Cuisine, Unagi (Eel)", "lat": 35.684028, "lng": 139.73894}, {"id": "A1302_12", "name": "Edo Mae Shinsaku", "tabelog_rating": 4.1, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130204/13270572/", "category": "Ningyocho Sta. / Tempura", "lat": 35.682432, "lng": 139.741103}, {"id": "A1302_13", "name": "Sumiyaki TORI8", "tabelog_rating": 4.1, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13293712/", "category": "Nihombashi Sta. / Yakitori (Grilled chicken skewers), Chicken dishes", "lat": 35.669924, "lng": 139.740806}, {"id": "A1302_14", "name": "Shunka Nakamura", "tabelog_rating": 4.1, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130204/13261122/", "category": "Higashi Nihombashi Sta. / Chinese, Japanese Cuisine", "lat": 35.67315, "lng": 139.73967}, {"id": "A1317_7", "name": "tenpura kusunoki Nakameguro ten", "tabelog_rating": 4.09, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13304124/", "category": "Naka Meguro Sta. / Tempura, Ten-don (Tempura bowl)", "lat": 35.655279, "lng": 139.69683}, {"id": "A1317_8", "name": "En Sui", "tabelog_rating": 4.07, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13254619/", "category": "Naka Meguro Sta. / Japanese Cuisine", "lat": 35.657724, "lng": 139.701774}, {"id": "A1317_9", "name": "Sushi Saitou Hanare NANZUKA", "tabelog_rating": 4.06, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13248691/", "category": "Naka Meguro Sta. / Sushi", "lat": 35.665051, "lng": 139.701058}, {"id": "A1304_1", "name": "Raa Menya Shima", "tabelog_rating": 4.03, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13247487/", "category": "Nishi Shinjuku Gochome Sta. / Ramen, Tsukemen (Dipping noodles)", "lat": 35.687751, "lng": 139.69945}, {"id": "A1302_15", "name": "Shutei Yuzawa", "tabelog_rating": 4.02, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130204/13304051/", "category": "Bakuroyokoyama Sta. / Yakitori (Grilled chicken skewers), Chicken dishes, Izakaya (Japanese style tavern)", "lat": 35.668913, "lng": 139.739374}, {"id": "A1302_16", "name": "Omino Tsubaki", "tabelog_rating": 4.02, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13290286/", "category": "Kyobashi Sta. / Yakitori (Grilled chicken skewers)", "lat": 35.669154, "lng": 139.745948}, {"id": "A1303_12", "name": "recte", "tabelog_rating": 4.02, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130303/13036041/", "category": "Daikan yama Sta. / French", "lat": 35.655803, "lng": 139.744619}, {"id": "A1303_13", "name": "jinen.", "tabelog_rating": 4.02, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13263230/", "category": "Shinsen Sta. / French, Creative, Innovative", "lat": 35.664709, "lng": 139.748077}, {"id": "A1317_10", "name": "quinto", "tabelog_rating": 4.01, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13285235/", "category": "Ikejiri Ohashi Sta. / Creative", "lat": 35.656944, "lng": 139.696455}, {"id": "A1303_14", "name": "ess", "tabelog_rating": 4.0, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13302439/", "category": "Shinsen Sta. / Italian", "lat": 35.652335, "lng": 139.742407}, {"id": "A1317_11", "name": "Nakameguro Wakasa", "tabelog_rating": 4.0, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13295672/", "category": "Naka Meguro Sta. / Korean, Creative, Nabe (Japanese hot pot)", "lat": 35.657301, "lng": 139.69433}, {"id": "A1302_17", "name": "Kawada", "tabelog_rating": 3.99, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130204/13232330/", "category": "Ningyocho Sta. / Japanese Cuisine", "lat": 35.67582, "lng": 139.732416}, {"id": "A1303_15", "name": "Tempura Motoyoshi", "tabelog_rating": 3.98, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13270939/", "category": "Daikan yama Sta. / Tempura", "lat": 35.661177, "lng": 139.748357}, {"id": "A1304_2", "name": "KINO_", "tabelog_rating": 3.98, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130403/13285210/", "category": "Yoyogi Sta. / Innovative, French", "lat": 35.683085, "lng": 139.689516}, {"id": "A1303_16", "name": "Sushi Shinpaku", "tabelog_rating": 3.97, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13239713/", "category": "Ebisu Sta. / Sushi", "lat": 35.661642, "lng": 139.741942}, {"id": "A1304_3", "name": "Katsu Pulipo", "tabelog_rating": 3.97, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13264309/", "category": "Seibu Shinjuku Sta. / Tonkatsu (Pork cutlet), Katsu-don (Pork cutlet bowl)", "lat": 35.683006, "lng": 139.687912}, {"id": "A1304_4", "name": "SPICY CURRY Roka", "tabelog_rating": 3.97, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130404/13286023/", "category": "Okubo Sta. / Curry, Taiwanese", "lat": 35.691447, "lng": 139.697637}, {"id": "A1304_5", "name": "Tokyo Niku Shabuya", "tabelog_rating": 3.97, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13196268/", "category": "Higashi Shinjuku Sta. / Shabu shabu (Japanese hotpot), Sukiyaki (Japanese sweet soy hotpot), Beef dishes", "lat": 35.696066, "lng": 139.695215}, {"id": "A1317_12", "name": "L'Atelier à Ma Façon", "tabelog_rating": 3.97, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131715/13242556/", "category": "Kaminoge Sta. / Sweets, Cafe", "lat": 35.654304, "lng": 139.696977}, {"id": "A1303_17", "name": "CHIKAMINE", "tabelog_rating": 3.96, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13280028/", "category": "Shibuya Sta. / Tempura", "lat": 35.652727, "lng": 139.743137}, {"id": "A1317_13", "name": "GELATERIA ACQUOLINA", "tabelog_rating": 3.96, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13141364/", "category": "Yutenji Sta. / Gelato, Ice cream, Soft serve ice cream", "lat": 35.657772, "lng": 139.697475}, {"id": "A1302_18", "name": "Canton Ryori Sense", "tabelog_rating": 3.94, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13020361/", "category": "Mitsukoshimae Sta. / Chinese, Dim sum & Yum cha", "lat": 35.669371, "lng": 139.732378}, {"id": "A1303_18", "name": "Tempura Kitagawa", "tabelog_rating": 3.94, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13303769/", "category": "Ebisu Sta. / Tempura, Japanese Cuisine", "lat": 35.661867, "lng": 139.742216}, {"id": "A1317_14", "name": "Kasai", "tabelog_rating": 3.93, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131702/13242439/", "category": "Toritsu Daigaku Sta. / Italian", "lat": 35.661473, "lng": 139.694503}, {"id": "A1302_19", "name": "Le Jardin de Kamo", "tabelog_rating": 3.92, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130203/13298101/", "category": "Suitengumae Sta. / French", "lat": 35.675696, "lng": 139.734183}, {"id": "A1302_0", "name": "L'appartamento di NAOKI", "tabelog_rating": 3.92, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130204/13259645/", "category": "Ningyocho Sta. / Italian, Innovative", "lat": 35.67844, "lng": 139.733447}, {"id": "A1303_19", "name": "Ebisu Endo", "tabelog_rating": 3.92, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13231081/", "category": "Ebisu Sta. / Sushi", "lat": 35.655312, "lng": 139.749858}, {"id": "A1317_15", "name": "Trattoria e Pizzeria L'ARTE", "tabelog_rating": 3.92, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131706/13128533/", "category": "Sangen Jaya Sta. / Italian, Pizza, Pasta", "lat": 35.661702, "lng": 139.702889}, {"id": "A1302_1", "name": "La paix", "tabelog_rating": 3.91, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13173559/", "category": "Mitsukoshimae Sta. / French, Innovative", "lat": 35.678888, "lng": 139.745493}, {"id": "A1302_2", "name": "ESTERRE", "tabelog_rating": 3.91, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130201/13239843/", "category": "Otemachi Sta. / French", "lat": 35.684039, "lng": 139.741839}, {"id": "A1304_6", "name": "Il Lato", "tabelog_rating": 3.91, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13256289/", "category": "Shinjuku Sanchome Sta. / Italian", "lat": 35.684037, "lng": 139.693807}, {"id": "A1302_3", "name": "China Hanten Kohaku Kyu", "tabelog_rating": 3.9, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130201/13141135/", "category": "Otemachi Sta. / Chinese", "lat": 35.677068, "lng": 139.746776}, {"id": "A1303_0", "name": "La Blanche", "tabelog_rating": 3.89, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13002111/", "category": "Omote Sando Sta. / French", "lat": 35.661594, "lng": 139.74756}, {"id": "A1317_16", "name": "Natsuya no Chuka Soba", "tabelog_rating": 3.89, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131716/13293385/", "category": "Shimomaruko Sta. / Ramen", "lat": 35.65892, "lng": 139.692877}, {"id": "A1317_17", "name": "Chuka Soba Tagano", "tabelog_rating": 3.88, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131712/13003421/", "category": "Ebara Nakanobu Sta. / Ramen, Tsukemen (Dipping noodles)", "lat": 35.667101, "lng": 139.706619}, {"id": "A1317_18", "name": "Yakitori Uno", "tabelog_rating": 3.88, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131711/13130757/", "category": "Okusawa Sta. / Yakitori (Grilled chicken skewers)", "lat": 35.654253, "lng": 139.694054}, {"id": "A1317_19", "name": "Higashiyama Muku", "tabelog_rating": 3.88, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13286250/", "category": "Naka Meguro Sta. / Japanese Cuisine, Seafood, Crab", "lat": 35.661533, "lng": 139.707045}, {"id": "A1303_1", "name": "abysse", "tabelog_rating": 3.87, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13232482/", "category": "Daikan yama Sta. / French", "lat": 35.658357, "lng": 139.740837}, {"id": "A1303_2", "name": "WAJO × Rou", "tabelog_rating": 3.87, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130303/13254957/", "category": "Daikan yama Sta. / Italian, Innovative", "lat": 35.663345, "lng": 139.74901}, {"id": "A1302_4", "name": "Sanda Gyu Kamado Sumibi Yaki Westa", "tabelog_rating": 3.86, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13185496/", "category": "Nihombashi Sta. / Steak", "lat": 35.678921, "lng": 139.739558}, {"id": "A1303_3", "name": "Restaurant MANOIR", "tabelog_rating": 3.86, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13133477/", "category": "Hiro o Sta. / French, Restaurants", "lat": 35.663334, "lng": 139.749236}, {"id": "A1302_5", "name": "CHOCOLATIER PALET D’OR Tokyo", "tabelog_rating": 3.85, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130201/13038473/", "category": "Nijubashimae Sta. / Chocolate, Cafe, Cake", "lat": 35.679469, "lng": 139.740029}, {"id": "A1302_6", "name": "Nihonbashi Nagato", "tabelog_rating": 3.85, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13011481/", "category": "Nihombashi Sta. / Japanese traditional sweets", "lat": 35.669312, "lng": 139.735835}, {"id": "A1303_4", "name": "Minimal Tomigaya Honten", "tabelog_rating": 3.85, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13175834/", "category": "Yoyogi Hachiman Sta. / Chocolate, Cake, Cafe", "lat": 35.661765, "lng": 139.7476}, {"id": "A1303_5", "name": "Laekker", "tabelog_rating": 3.85, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130303/13243988/", "category": "Daikan yama Sta. / Bread, Sweets (Western style)", "lat": 35.654785, "lng": 139.738254}, {"id": "A1303_6", "name": "ARMONICO", "tabelog_rating": 3.85, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130303/13156479/", "category": "Daikan yama Sta. / Italian", "lat": 35.660013, "lng": 139.747361}, {"id": "A1303_7", "name": "LESS by Gabriele Riva & Kanako Sakakura", "tabelog_rating": 3.84, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13274859/", "category": "Ebisu Sta. / Cake, Chocolate", "lat": 35.654636, "lng": 139.741322}, {"id": "A1304_7", "name": "KEN'S CAFE TOKYO Sohon Ten", "tabelog_rating": 3.84, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130402/13024643/", "category": "Shinjuku Gyoemmae Sta. / Chocolate, Cake", "lat": 35.686177, "lng": 139.684962}, {"id": "A1302_7", "name": "VIRON Marunouchi Ten", "tabelog_rating": 3.83, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130201/13043904/", "category": "Tokyo Sta. / Bread, Cake, Cafe", "lat": 35.674592, "lng": 139.733614}, {"id": "A1304_8", "name": "RAMEN MATSUI", "tabelog_rating": 3.83, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130402/13285098/", "category": "Shinjuku Gyoemmae Sta. / Ramen", "lat": 35.693458, "lng": 139.693631}, {"id": "A1304_9", "name": "Spice Bar Mon Curry", "tabelog_rating": 3.83, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130404/13277319/", "category": "Okubo Sta. / Curry, Indian, Dining bar", "lat": 35.687838, "lng": 139.686171}, {"id": "A1304_10", "name": "NASQUILLO", "tabelog_rating": 3.83, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130402/13263017/", "category": "Shinjuku Gyoemmae Sta. / Steak", "lat": 35.686656, "lng": 139.687249}, {"id": "A1303_8", "name": "Simplicite", "tabelog_rating": 3.82, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130303/13298935/", "category": "Daikan yama Sta. / French", "lat": 35.653787, "lng": 139.746577}, {"id": "A1302_8", "name": "Hongoku Tei", "tabelog_rating": 3.81, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13046781/", "category": "Shin Nihombashi Sta. / Curry, Bar, Indian curry", "lat": 35.682773, "lng": 139.736211}, {"id": "A1302_9", "name": "EN FACE", "tabelog_rating": 3.81, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130204/13238193/", "category": "Ningyocho Sta. / French, Bistro", "lat": 35.679749, "lng": 139.747408}, {"id": "A1302_10", "name": "Sake to Spice Matsuko", "tabelog_rating": 3.81, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13249791/", "category": "Nihombashi Sta. / Curry, Bar", "lat": 35.673725, "lng": 139.733659}, {"id": "A1303_9", "name": "VIRON Shibuya Ten", "tabelog_rating": 3.81, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13004626/", "category": "Shibuya Sta. / Bread, Sandwich, Cake", "lat": 35.662199, "lng": 139.747973}, {"id": "A1302_11", "name": "TORAYA TOKYO", "tabelog_rating": 3.8, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130201/13147493/", "category": "Tokyo Sta. / Cafe, Japanese traditional sweets, Kakigori (Shaved ice)", "lat": 35.677221, "lng": 139.745469}, {"id": "A1303_10", "name": "Saucer", "tabelog_rating": 3.8, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13263364/", "category": "Daikan yama Sta. / French", "lat": 35.658301, "lng": 139.743653}, {"id": "A1302_12", "name": "POINT ET LIGNE", "tabelog_rating": 3.79, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130201/13038468/", "category": "Nijubashimae Sta. / Bread, Bistro, Cafe", "lat": 35.668288, "lng": 139.739672}, {"id": "A1302_13", "name": "Echire Maison du Beurre", "tabelog_rating": 3.79, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130201/13096439/", "category": "Nijubashimae Sta. / Cake, Bread, Gelato, Ice cream", "lat": 35.677313, "lng": 139.743401}, {"id": "A1302_14", "name": "Usagiya Hon Ten", "tabelog_rating": 3.79, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130202/13003250/", "category": "Nihombashi Sta. / Japanese traditional sweets, Dorayaki (Japanese sweet pancake)", "lat": 35.670405, "lng": 139.741963}, {"id": "A1303_11", "name": "Taiyaki Hiiragi", "tabelog_rating": 3.79, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13026096/", "category": "Ebisu Sta. / Taiyaki, Obanyaki, Soft serve ice cream", "lat": 35.664783, "lng": 139.737532}, {"id": "A1303_12", "name": "Le Pan de Joel Robuchon Shibuya Hikarieshinkyuesuten", "tabelog_rating": 3.79, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13140263/", "category": "Shibuya Sta. / Bread, Sandwich, Sweets (Western style)", "lat": 35.661375, "lng": 139.750721}, {"id": "A1303_13", "name": "Madame Toki", "tabelog_rating": 3.79, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130303/13001707/", "category": "Daikan yama Sta. / French", "lat": 35.657828, "lng": 139.744887}, {"id": "A1304_11", "name": "FISH Shinjuku Ten", "tabelog_rating": 3.79, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13222551/", "category": "Seibu Shinjuku Sta. / Curry", "lat": 35.691833, "lng": 139.684004}, {"id": "A1302_15", "name": "Menya Shichisai", "tabelog_rating": 3.78, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130203/13184399/", "category": "Hatchobori Sta. / Ramen, Tsukemen (Dipping noodles)", "lat": 35.676082, "lng": 139.737984}, {"id": "A1302_16", "name": "Yanagiya", "tabelog_rating": 3.78, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130204/13003065/", "category": "Ningyocho Sta. / Taiyaki, Obanyaki, Gelato, Ice cream", "lat": 35.675233, "lng": 139.737073}, {"id": "A1302_17", "name": "Rodin", "tabelog_rating": 3.78, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130203/13048485/", "category": "Takaracho Sta. / Curry, Indian curry", "lat": 35.682408, "lng": 139.741519}, {"id": "A1302_18", "name": "La Boutique de Joël Robuchon Marunochi Burikkusukuea Ten", "tabelog_rating": 3.78, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130201/13096409/", "category": "Nijubashimae Sta. / Bread, Cake, Cafe", "lat": 35.672977, "lng": 139.735321}, {"id": "A1302_19", "name": "Sucre-rie", "tabelog_rating": 3.78, "google_rating": null, "address": "Chuo", "url": "https://s.tabelog.com/en/tokyo/A1302/A130204/13050996/", "category": "Ningyocho Sta. / Cake, Sweets", "lat": 35.676093, "lng": 139.741474}, {"id": "A1303_14", "name": "Hayashi", "tabelog_rating": 3.78, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13003367/", "category": "Shibuya Sta. / Ramen", "lat": 35.661784, "lng": 139.751669}, {"id": "A1303_15", "name": "LA BOUTIQUE de Joel Robushon Ebisu Garden Place Ten", "tabelog_rating": 3.78, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13014064/", "category": "Ebisu Sta. / Bread, Cake, Sandwich", "lat": 35.651425, "lng": 139.744793}, {"id": "A1303_16", "name": "Chirimulo", "tabelog_rating": 3.78, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13164533/", "category": "Daikan yama Sta. / Cake, Sweets", "lat": 35.658363, "lng": 139.750925}, {"id": "A1304_12", "name": "Menya Sho Hon Ten", "tabelog_rating": 3.78, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13040181/", "category": "Seibu Shinjuku Sta. / Ramen", "lat": 35.694714, "lng": 139.694563}, {"id": "A1304_13", "name": "Le Pan de Joël Robuchon Nyuman Shinjukuten", "tabelog_rating": 3.78, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13193559/", "category": "Shinjuku Sta. / Bread", "lat": 35.686787, "lng": 139.686029}, {"id": "A1304_14", "name": "noix de beurre Shinjuku Isetan Ten", "tabelog_rating": 3.78, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13124571/", "category": "Shinjuku Sanchome Sta. / Cake, Chocolate", "lat": 35.68526, "lng": 139.689467}, {"id": "A1304_15", "name": "Spicy Curry House Hangetsu", "tabelog_rating": 3.78, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13211678/", "category": "Seibu Shinjuku Sta. / Curry, Indian curry", "lat": 35.696097, "lng": 139.688033}, {"id": "A1317_0", "name": "Mendokoro Bigiya Gakugei Daigaku Honten", "tabelog_rating": 3.78, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131702/13093976/", "category": "Gakugei Daigaku Sta. / Ramen, Tsukemen (Dipping noodles)", "lat": 35.667074, "lng": 139.70212}, {"id": "A1317_1", "name": "Criollo Nakameguro Ten", "tabelog_rating": 3.78, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13077927/", "category": "Naka Meguro Sta. / Cake, Chocolate, Macaroon", "lat": 35.656929, "lng": 139.70573}, {"id": "A1317_2", "name": "RODEO", "tabelog_rating": 3.78, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13213575/", "category": "Naka Meguro Sta. / Italian, Baru (Spanish style bar), Pasta", "lat": 35.663251, "lng": 139.701188}, {"id": "A1317_3", "name": "Chimoto", "tabelog_rating": 3.78, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131702/13003218/", "category": "Toritsu Daigaku Sta. / Japanese traditional sweets, Cafe featuring Japanese sweets, Kakigori (Shaved ice)", "lat": 35.660666, "lng": 139.699661}, {"id": "A1317_4", "name": "itokito", "tabelog_rating": 3.78, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131711/13048404/", "category": "Ookayama Sta. / Bread, Sandwich", "lat": 35.661349, "lng": 139.702254}, {"id": "A1303_17", "name": "Chatei Hatou", "tabelog_rating": 3.77, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13001169/", "category": "Shibuya Sta. / Kissa (Japanese coffee shop), Cafe, Cake", "lat": 35.658832, "lng": 139.742637}, {"id": "A1303_18", "name": "Patisserie Les Annees Folles Ebisu Honten", "tabelog_rating": 3.77, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13149501/", "category": "Daikan yama Sta. / Cake", "lat": 35.652597, "lng": 139.738304}, {"id": "A1303_19", "name": "LA TABLE de Joël Robuchon", "tabelog_rating": 3.77, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13010725/", "category": "Ebisu Sta. / French", "lat": 35.659181, "lng": 139.743812}, {"id": "A1303_0", "name": "Maison Paul Bocuse", "tabelog_rating": 3.77, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130303/13040327/", "category": "Daikan yama Sta. / French, Innovative", "lat": 35.664234, "lng": 139.752961}, {"id": "A1303_1", "name": "IL PLEUT SUR LA SEINE", "tabelog_rating": 3.77, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130303/13001912/", "category": "Daikan yama Sta. / Cake", "lat": 35.661653, "lng": 139.743042}, {"id": "A1303_2", "name": "Ajuuta", "tabelog_rating": 3.77, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13257494/", "category": "Shinsen Sta. / Sushi, Japanese Cuisine", "lat": 35.659221, "lng": 139.739846}, {"id": "A1303_3", "name": "AMOUR", "tabelog_rating": 3.77, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13142028/", "category": "Ebisu Sta. / French", "lat": 35.65851, "lng": 139.746614}, {"id": "A1304_16", "name": "Fuuunji Shinjuku Hon Ten", "tabelog_rating": 3.77, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13044091/", "category": "Minami Shinjuku Sta. / Ramen, Tsukemen (Dipping noodles)", "lat": 35.692036, "lng": 139.685507}, {"id": "A1304_17", "name": "Tsukemen Gonokami Seisakujo", "tabelog_rating": 3.77, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13120708/", "category": "Shinjuku Sanchome Sta. / Tsukemen (Dipping noodles)", "lat": 35.696166, "lng": 139.686248}, {"id": "A1304_18", "name": "SOBA HOUSE Konjiki Hototogisu Shinjuku Gyoen Honten", "tabelog_rating": 3.77, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130402/13222172/", "category": "Shinjuku Gyoemmae Sta. / Ramen, Tsukemen (Dipping noodles)", "lat": 35.69524, "lng": 139.693794}, {"id": "A1304_19", "name": "HEDIARD Shinjuku Hon Ten", "tabelog_rating": 3.77, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13012061/", "category": "Shinjuku Sanchome Sta. / Bread, Cafe, Cake", "lat": 35.689017, "lng": 139.687799}, {"id": "A1317_5", "name": "Yakumo", "tabelog_rating": 3.77, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131705/13204333/", "category": "Ikejiri Ohashi Sta. / Ramen, Tsukemen (Dipping noodles)", "lat": 35.659886, "lng": 139.704266}, {"id": "A1317_6", "name": "Tonkatsu Enraku", "tabelog_rating": 3.77, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131714/13034183/", "category": "Ikegami Sta. / Tonkatsu (Pork cutlet), Katsu-don (Pork cutlet bowl)", "lat": 35.661715, "lng": 139.695915}, {"id": "A1317_7", "name": "Comme’N TOKYO Honten", "tabelog_rating": 3.77, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131715/13249511/", "category": "Kuhombutsu Sta. / Bread", "lat": 35.656419, "lng": 139.703893}, {"id": "A1317_8", "name": "ARTISAN BOULANGER CUPIDO", "tabelog_rating": 3.77, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131711/13035704/", "category": "Okusawa Sta. / Bread, Sandwich, Side dishes, Delicatessen", "lat": 35.656995, "lng": 139.700649}, {"id": "A1317_9", "name": "Parlour Laurel", "tabelog_rating": 3.77, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131715/13003097/", "category": "Kuhombutsu Sta. / Cake, Cafe", "lat": 35.662754, "lng": 139.696968}, {"id": "A1317_10", "name": "Shunsai Ogura Ya", "tabelog_rating": 3.77, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131705/13123615/", "category": "Ikejiri Ohashi Sta. / Japanese Cuisine, Izakaya (Japanese style tavern), Seafood", "lat": 35.659666, "lng": 139.700606}, {"id": "A1303_4", "name": "Chuka Menten Kiraku", "tabelog_rating": 3.76, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13001705/", "category": "Shinsen Sta. / Ramen, Dumpling, Chinese", "lat": 35.652221, "lng": 139.746957}, {"id": "A1303_5", "name": "Murghee", "tabelog_rating": 3.76, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13001732/", "category": "Shinsen Sta. / Curry, Indian curry", "lat": 35.664869, "lng": 139.741492}, {"id": "A1303_6", "name": "Peter Luger Steak House Tokyo", "tabelog_rating": 3.76, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13258435/", "category": "Ebisu Sta. / Steak", "lat": 35.651751, "lng": 139.750085}, {"id": "A1303_7", "name": "Curry Shop Hatsukoi", "tabelog_rating": 3.76, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13240190/", "category": "Shinsen Sta. / Curry, Baru (Spanish style bar), Asian, Ethnic", "lat": 35.664064, "lng": 139.739493}, {"id": "A1303_8", "name": "Pork Vindaloo Taberu Fukudaitoryo", "tabelog_rating": 3.76, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13235448/", "category": "Shinsen Sta. / Indian curry, Curry", "lat": 35.661054, "lng": 139.738509}, {"id": "A1303_9", "name": "HILLSIDE PANTRY Daikanyama", "tabelog_rating": 3.76, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130303/13002071/", "category": "Daikan yama Sta. / Bread, Side dishes, Delicatessen, Sandwich", "lat": 35.66026, "lng": 139.73813}, {"id": "A1303_10", "name": "MarieIranganee", "tabelog_rating": 3.76, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13166471/", "category": "Shinsen Sta. / Curry, Sri Lankan", "lat": 35.656528, "lng": 139.750899}, {"id": "A1303_11", "name": "Ebisu Sushi Fujimasa", "tabelog_rating": 3.76, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13251446/", "category": "Ebisu Sta. / Sushi", "lat": 35.65843, "lng": 139.7514}, {"id": "A1303_12", "name": "Chinese Shindai", "tabelog_rating": 3.76, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130301/13240037/", "category": "Shinsen Sta. / Chinese", "lat": 35.650226, "lng": 139.745853}, {"id": "A1303_13", "name": "As", "tabelog_rating": 3.76, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13279065/", "category": "Ebisu Sta. / Sweets (Western style), Cafe, Sweets", "lat": 35.650867, "lng": 139.747706}, {"id": "A1317_11", "name": "shiva curry wara", "tabelog_rating": 3.76, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131706/13151738/", "category": "Sangen Jaya Sta. / Indian, Indian curry", "lat": 35.656225, "lng": 139.69394}, {"id": "A1317_12", "name": "Wa kitchen Kanna", "tabelog_rating": 3.76, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131706/13156812/", "category": "Sangen Jaya Sta. / Kakigori (Shaved ice), Creative", "lat": 35.653452, "lng": 139.702195}, {"id": "A1317_13", "name": "TOLO PAN TOKYO", "tabelog_rating": 3.76, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131705/13093803/", "category": "Ikejiri Ohashi Sta. / Bread, Sandwich, Bagel", "lat": 35.663697, "lng": 139.695936}, {"id": "A1317_14", "name": "Komugi to Kobo Hamada Ya Sangenjaya Honten", "tabelog_rating": 3.76, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131706/13005398/", "category": "Nishi Taishido Sta. / Bread", "lat": 35.653579, "lng": 139.708242}, {"id": "A1317_15", "name": "Patisserie Cacao et Paris", "tabelog_rating": 3.76, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13039525/", "category": "Naka Meguro Sta. / Cake, Sweets (Western style), Cafe", "lat": 35.657621, "lng": 139.698796}, {"id": "A1317_16", "name": "Addict au Sucre", "tabelog_rating": 3.76, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131702/13171753/", "category": "Toritsu Daigaku Sta. / Cake, Cafe, Bread", "lat": 35.662055, "lng": 139.70251}, {"id": "A1317_17", "name": "torisawa", "tabelog_rating": 3.76, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131701/13248473/", "category": "Naka Meguro Sta. / Yakitori (Grilled chicken skewers), Izakaya (Japanese style tavern)", "lat": 35.65897, "lng": 139.696931}, {"id": "A1317_18", "name": "Hao Hao", "tabelog_rating": 3.76, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131710/13007471/", "category": "Fudo Mae Sta. / Chinese", "lat": 35.656254, "lng": 139.695281}, {"id": "A1303_14", "name": "Oyadori Chuka Soba Ayagawa Honten", "tabelog_rating": 3.75, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13253970/", "category": "Ebisu Sta. / Ramen", "lat": 35.652411, "lng": 139.741322}, {"id": "A1303_15", "name": "JAPANESE ICE OUCA", "tabelog_rating": 3.75, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13040777/", "category": "Ebisu Sta. / Gelato, Ice cream, Cafe, Kakigori (Shaved ice)", "lat": 35.665128, "lng": 139.75095}, {"id": "A1303_16", "name": "Le Grenier a Pain Atore Ebisu Ten", "tabelog_rating": 3.75, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13194633/", "category": "Ebisu Sta. / Bread, Cafe", "lat": 35.658263, "lng": 139.748948}, {"id": "A1303_17", "name": "MATSUNOSUKE N.Y. Tokyo Daikanyama Ten", "tabelog_rating": 3.75, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130303/13005179/", "category": "Daikan yama Sta. / Cake, Cafe, Pancake", "lat": 35.658145, "lng": 139.745898}, {"id": "A1303_18", "name": "Tokyo Bombay Ebisu Honten", "tabelog_rating": 3.75, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13221284/", "category": "Ebisu Sta. / Curry, Indian curry", "lat": 35.656245, "lng": 139.748222}, {"id": "A1303_19", "name": "Toriyaki Ohana", "tabelog_rating": 3.75, "google_rating": null, "address": "Minato", "url": "https://s.tabelog.com/en/tokyo/A1303/A130302/13265540/", "category": "Ebisu Sta. / Chicken dishes", "lat": 35.660259, "lng": 139.740305}, {"id": "A1317_19", "name": "La TRIPLETTA", "tabelog_rating": 3.75, "google_rating": null, "address": "Shibuya", "url": "https://s.tabelog.com/en/tokyo/A1317/A131710/13165472/", "category": "Musashi Koyama Sta. / Pizza, Italian, Dining bar", "lat": 35.666653, "lng": 139.706043}, {"id": "A1304_0", "name": "CHEF'S", "tabelog_rating": 3.73, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130402/13000884/", "category": "Shinjuku Gyoemmae Sta. / Chinese", "lat": 35.693448, "lng": 139.68422}, {"id": "A1304_1", "name": "Toranomon Okanoeisen Shinjukuku Takashimaya Ten", "tabelog_rating": 3.73, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13056538/", "category": "Shinjuku Sta. / Japanese traditional sweets, Daifuku (Red bean paste rice cake) , Dorayaki (Japanese sweet pancake)", "lat": 35.691121, "lng": 139.699532}, {"id": "A1304_2", "name": "Sushi Iwase", "tabelog_rating": 3.73, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13146391/", "category": "Tochomae Sta. / Sushi", "lat": 35.691898, "lng": 139.698087}, {"id": "A1304_3", "name": "Gandhi", "tabelog_rating": 3.72, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13000880/", "category": "Shinjuku Sanchome Sta. / Curry", "lat": 35.697411, "lng": 139.692198}, {"id": "A1304_4", "name": "Coffee Kizoku Edinburgh", "tabelog_rating": 3.72, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13017217/", "category": "Shinjuku Sanchome Sta. / Kissa (Japanese coffee shop), Cafe", "lat": 35.685351, "lng": 139.696342}, {"id": "A1304_5", "name": "PRETTY PORK FACTORY", "tabelog_rating": 3.72, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13254601/", "category": "Seibu Shinjuku Sta. / Pork shabu shabu, Korean", "lat": 35.688281, "lng": 139.694871}, {"id": "A1304_6", "name": "Caruso", "tabelog_rating": 3.72, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13111408/", "category": "Shinjuku Sanchome Sta. / Bar", "lat": 35.696231, "lng": 139.693861}, {"id": "A1304_7", "name": "Niboshi Chuka Soba Suzuran", "tabelog_rating": 3.71, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13141542/", "category": "Shinjuku Sanchome Sta. / Tsukemen (Dipping noodles), Ramen, Abura-soba, Maze-soba", "lat": 35.690827, "lng": 139.693479}, {"id": "A1304_8", "name": "Tokyo Dominica", "tabelog_rating": 3.71, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13124113/", "category": "Shinjuku Sanchome Sta. / Soup Curry, Curry", "lat": 35.681705, "lng": 139.687615}, {"id": "A1304_9", "name": "Toki Ya Shinjuku Odakyu Haruku Ten", "tabelog_rating": 3.71, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13006696/", "category": "Shinjuku Nishiguchi Sta. / Cafe featuring Japanese sweets, Japanese traditional sweets, Kissa (Japanese coffee shop)", "lat": 35.684587, "lng": 139.692579}, {"id": "A1304_10", "name": "Eagle", "tabelog_rating": 3.71, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13000922/", "category": "Shinjuku Nishiguchi Sta. / Bar, Bistro, Baru (Spanish style bar)", "lat": 35.69651, "lng": 139.686518}, {"id": "A1304_11", "name": "Higashi Shinjuku Sanrasa", "tabelog_rating": 3.71, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13215551/", "category": "Higashi Shinjuku Sta. / Curry", "lat": 35.696493, "lng": 139.690077}, {"id": "A1304_12", "name": "Shokudo Wata", "tabelog_rating": 3.71, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130402/13301720/", "category": "Shinjuku Gyoemmae Sta. / Cafeteria", "lat": 35.689704, "lng": 139.69112}, {"id": "A1304_13", "name": "Chuka Soba Rukawa", "tabelog_rating": 3.7, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13236258/", "category": "Shinjuku Nishiguchi Sta. / Ramen", "lat": 35.685684, "lng": 139.686955}, {"id": "A1304_14", "name": "Jikabaisen Coffee Bon", "tabelog_rating": 3.7, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13000735/", "category": "Shinjuku Nishiguchi Sta. / Kissa (Japanese coffee shop), Cafe, Cake", "lat": 35.685291, "lng": 139.690373}, {"id": "A1304_15", "name": "Menkoidokoro Isoji", "tabelog_rating": 3.7, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130403/13041621/", "category": "Minami Shinjuku Sta. / Ramen", "lat": 35.684601, "lng": 139.694706}, {"id": "A1304_16", "name": "Spice Bazaar Achakana", "tabelog_rating": 3.7, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13233798/", "category": "Shinjuku Nishiguchi Sta. / Indian, Bar, Indian curry", "lat": 35.686458, "lng": 139.694955}, {"id": "A1304_17", "name": "Komugi to Niku Momo no Ki", "tabelog_rating": 3.7, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130402/13098255/", "category": "Shinjuku Gyoemmae Sta. / Tsukemen (Dipping noodles)", "lat": 35.697196, "lng": 139.692784}, {"id": "A1304_18", "name": "Cha no Ikedaya", "tabelog_rating": 3.7, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13049584/", "category": "Shinjuku Sta. / Soft serve ice cream, Cafe, Gelato, Ice cream", "lat": 35.683372, "lng": 139.69479}, {"id": "A1304_19", "name": "Udon Shin", "tabelog_rating": 3.69, "google_rating": null, "address": "A1304", "url": "https://s.tabelog.com/en/tokyo/A1304/A130401/13125862/", "category": "Minami Shinjuku Sta. / Udon (Wheat noodles)", "lat": 35.687213, "lng": 139.688728}], "total": 200};
+        
+        let map;
+        let markers = [];
+        let allRestaurants = [];
+        let currentFilter = 3.4;
+        let userMarker = null;
+        let userCircle = null;
+        let watchId = null;
+        let isTracking = false;
+        let userPosition = null;
+        
+        function initMap() {
+            map = L.map('map').setView([35.6762, 139.6503], 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap',
+                maxZoom: 19
+            }).addTo(map);
+        }
+        
+        function loadRestaurants() {
+            if (!RESTAURANTS_DATA) return;
+            allRestaurants = RESTAURANTS_DATA.restaurants || [];
+            document.getElementById('stats').textContent = 
+                `📊 ${allRestaurants.length} restaurants`;
+            filterAndDisplay();
+        }
+        
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                     Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        function filterAndDisplay() {
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            
+            const filtered = allRestaurants.filter(r => r.tabelog_rating >= currentFilter);
+            
+            filtered.forEach(r => {
+                const color = r.tabelog_rating >= 4.3 ? '#ff0000' : 
+                              r.tabelog_rating >= 4.0 ? '#ff6600' : 
+                              r.tabelog_rating >= 3.7 ? '#ff9900' : '#ffcc00';
+                
+                const marker = L.circleMarker([r.lat, r.lng], {
+                    radius: 7,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                });
+                
+                let distanceText = '';
+                if (userPosition) {
+                    const dist = calculateDistance(
+                        userPosition.latitude, userPosition.longitude,
+                        r.lat, r.lng
+                    );
+                    distanceText = `<div class="popup-distance">📍 ${dist < 1 ? (dist*1000).toFixed(0) + 'm' : dist.toFixed(1) + 'km'} away</div>`;
+                }
+                
+                marker.bindPopup(`
+                    <div class="popup-name">${r.name}</div>
+                    <div class="popup-rating">⭐ ${r.tabelog_rating}</div>
+                    <div class="popup-category">${r.category || ''}</div>
+                    ${distanceText}
+                    <a href="${r.url}" target="_blank" class="popup-link">View on Tabelog →</a>
+                `);
+                
+                marker.addTo(map);
+                markers.push(marker);
+            });
+            
+            document.getElementById('stats').textContent = 
+                `📊 ${filtered.length}/${allRestaurants.length} restaurants` + 
+                (isTracking ? ' | 📍 GPS Active' : '');
+        }
+        
+        function updateUserLocation(position) {
+            userPosition = position.coords;
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            
+            if (!userMarker) {
+                // Create user marker
+                userMarker = L.marker([lat, lng], {
+                    icon: L.divIcon({
+                        className: 'user-marker',
+                        html: '<div style="background:#2196F3;width:16px;height:16px;border-radius:50%;border:3px solid white;box-shadow:0 0 10px rgba(0,0,0,0.5)"></div>',
+                        iconSize: [16, 16]
+                    })
+                }).addTo(map);
+                
+                // Create accuracy circle
+                userCircle = L.circle([lat, lng], {
+                    radius: position.coords.accuracy,
+                    color: '#2196F3',
+                    fillColor: '#2196F3',
+                    fillOpacity: 0.1,
+                    weight: 1
+                }).addTo(map);
+                
+                // Center map on user
+                map.setView([lat, lng], 15);
+            } else {
+                // Update existing markers
+                userMarker.setLatLng([lat, lng]);
+                userCircle.setLatLng([lat, lng]);
+                userCircle.setRadius(position.coords.accuracy);
+                
+                // Keep user centered (smooth pan)
+                map.panTo([lat, lng]);
+            }
+            
+            // Refresh popups with updated distances
+            filterAndDisplay();
+        }
+        
+        function toggleTracking() {
+            const btn = document.getElementById('locateBtn');
+            
+            if (!isTracking) {
+                // Start tracking
+                if (navigator.geolocation) {
+                    watchId = navigator.geolocation.watchPosition(
+                        updateUserLocation,
+                        (error) => {
+                            alert('GPS Error: ' + error.message);
+                            stopTracking();
+                        },
+                        {
+                            enableHighAccuracy: true,
+                            maximumAge: 5000,
+                            timeout: 10000
+                        }
+                    );
+                    isTracking = true;
+                    btn.classList.add('active');
+                    btn.textContent = '📍';
+                } else {
+                    alert('Geolocation not supported');
+                }
+            } else {
+                stopTracking();
+            }
+        }
+        
+        function stopTracking() {
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            isTracking = false;
+            document.getElementById('locateBtn').classList.remove('active');
+            
+            if (userMarker) {
+                map.removeLayer(userMarker);
+                map.removeLayer(userCircle);
+                userMarker = null;
+                userCircle = null;
+            }
+            userPosition = null;
+            filterAndDisplay();
+        }
+        
+        // Event listeners
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = parseFloat(btn.dataset.rating);
+                filterAndDisplay();
+            });
+        });
+        
+        document.getElementById('locateBtn').addEventListener('click', toggleTracking);
+        
+        // Initialize
+        initMap();
+        loadRestaurants();
+    </script>
+</body>
+</html>
