@@ -1,0 +1,548 @@
+#!/usr/bin/env python3
+"""
+Build static HTML map with embedded restaurant data
+"""
+import json
+
+# Load restaurant data
+with open('final_restaurants.json', 'r', encoding='utf-8') as f:
+    restaurants = json.load(f)
+
+print(f"Loading {len(restaurants)} restaurants...")
+
+# Cuisine mapping (Japanese → English categories)
+cuisine_categories = {
+    'Sushi': ['寿司', 'すし', 'スシ', 'Sushi'],
+    'Ramen': ['ラーメン', 'らーめん', 'つけ麺', 'Ramen'],
+    'Tempura': ['天ぷら', 'てんぷら', 'Tempura'],
+    'Yakitori': ['焼き鳥', 'やきとり', 'Yakitori', '鳥料理'],
+    'Yakiniku': ['焼肉', 'やきにく', 'Yakiniku', 'ホルモン'],
+    'Tonkatsu': ['とんかつ', 'トンカツ', 'Tonkatsu', 'カツ'],
+    'Unagi': ['うなぎ', 'ウナギ', 'Unagi', '鰻'],
+    'Japanese': ['日本料理', '和食', 'Japanese', '懐石', '割烹'],
+    'Soba': ['そば', 'ソバ', 'Soba', '蕎麦'],
+    'Udon': ['うどん', 'ウドン', 'Udon'],
+    'Curry': ['カレー', 'Curry', 'カリー'],
+    'Bakery': ['パン', 'ブーランジェリー', 'Bakery', 'ベーカリー'],
+    'Desserts': ['ケーキ', '和菓子', 'スイーツ', 'Dessert', 'パティスリー', 'たい焼き']
+}
+
+def categorize_cuisine(cuisine_text):
+    """Categorize a restaurant's cuisine into filter categories"""
+    if not cuisine_text:
+        return []
+    
+    categories = []
+    cuisine_lower = cuisine_text.lower()
+    
+    for category, keywords in cuisine_categories.items():
+        for keyword in keywords:
+            if keyword.lower() in cuisine_lower:
+                categories.append(category)
+                break
+    
+    return categories
+
+# Create GeoJSON and categorize
+features = []
+category_counts = {}
+
+for r in restaurants:
+    if 'lat' in r and 'lng' in r:
+        categories = categorize_cuisine(r.get('cuisine', ''))
+        
+        # Count categories
+        for cat in categories:
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+        
+        feature = {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [r['lng'], r['lat']]
+            },
+            "properties": {
+                "name": r['name'],
+                "tabelog_rating": r['tabelog_rating'],
+                "google_rating": r['google_rating'],
+                "google_reviews": r.get('google_user_ratings_total', 0),
+                "cuisine": r.get('cuisine', ''),
+                "area": r.get('area', ''),
+                "address": r.get('google_address', ''),
+                "categories": categories
+            }
+        }
+        features.append(feature)
+
+geojson = {
+    "type": "FeatureCollection",
+    "features": features
+}
+
+print(f"Created GeoJSON with {len(features)} restaurants")
+print(f"\nCategory counts:")
+for cat, count in sorted(category_counts.items(), key=lambda x: -x[1]):
+    print(f"  {cat}: {count}")
+
+# Build HTML
+html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tokyo Food Finder - 950 Top-Rated Restaurants</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+        }}
+        
+        #map {{
+            position: absolute;
+            top: 60px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }}
+        
+        .header {{
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }}
+        
+        .header h1 {{
+            font-size: 20px;
+            font-weight: 600;
+        }}
+        
+        .stats {{
+            font-size: 14px;
+            opacity: 0.9;
+        }}
+        
+        .controls {{
+            position: absolute;
+            top: 70px;
+            right: 10px;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            max-width: 250px;
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
+        }}
+        
+        .controls h3 {{
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #333;
+        }}
+        
+        .filter {{
+            margin-bottom: 12px;
+        }}
+        
+        .filter label {{
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }}
+        
+        .filter select {{
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }}
+        
+        .cuisine-filter {{
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }}
+        
+        .cuisine-options {{
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            margin-top: 10px;
+        }}
+        
+        .cuisine-option {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+        }}
+        
+        .cuisine-option input[type="checkbox"] {{
+            cursor: pointer;
+        }}
+        
+        .cuisine-option label {{
+            cursor: pointer;
+            margin: 0;
+            flex: 1;
+        }}
+        
+        .cuisine-count {{
+            color: #999;
+            font-size: 11px;
+        }}
+        
+        .gps-btn {{
+            width: 100%;
+            padding: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 10px;
+        }}
+        
+        .gps-btn:hover {{
+            background: #5568d3;
+        }}
+        
+        .gps-btn.active {{
+            background: #22c55e;
+        }}
+        
+        .leaflet-popup-content {{
+            margin: 15px;
+            min-width: 200px;
+        }}
+        
+        .popup-name {{
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }}
+        
+        .popup-rating {{
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }}
+        
+        .popup-rating span {{
+            background: #f3f4f6;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }}
+        
+        .popup-info {{
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }}
+        
+        .popup-distance {{
+            font-size: 14px;
+            color: #667eea;
+            font-weight: 600;
+            margin-top: 8px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🗼 Tokyo Food Finder</h1>
+        <div class="stats">950 Restaurants • Tabelog 3.4+ & Google 4.2+</div>
+    </div>
+    
+    <div class="controls">
+        <h3>Filters</h3>
+        
+        <div class="filter">
+            <label>Google Rating</label>
+            <select id="rating-filter">
+                <option value="4.2">4.2+ Stars (950)</option>
+                <option value="4.5">4.5+ Stars</option>
+                <option value="4.7">4.7+ Stars</option>
+                <option value="4.9">4.9+ Stars</option>
+            </select>
+        </div>
+        
+        <div class="cuisine-filter">
+            <label style="font-weight: 600; margin-bottom: 8px;">Cuisine Type</label>
+            <div class="cuisine-options">
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-sushi" value="Sushi">
+                    <label for="cuisine-sushi">🍣 Sushi <span class="cuisine-count">({category_counts.get('Sushi', 0)})</span></label>
+                </div>
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-ramen" value="Ramen">
+                    <label for="cuisine-ramen">🍜 Ramen <span class="cuisine-count">({category_counts.get('Ramen', 0)})</span></label>
+                </div>
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-tempura" value="Tempura">
+                    <label for="cuisine-tempura">🍤 Tempura <span class="cuisine-count">({category_counts.get('Tempura', 0)})</span></label>
+                </div>
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-yakitori" value="Yakitori">
+                    <label for="cuisine-yakitori">🍗 Yakitori <span class="cuisine-count">({category_counts.get('Yakitori', 0)})</span></label>
+                </div>
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-yakiniku" value="Yakiniku">
+                    <label for="cuisine-yakiniku">🔥 Yakiniku <span class="cuisine-count">({category_counts.get('Yakiniku', 0)})</span></label>
+                </div>
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-tonkatsu" value="Tonkatsu">
+                    <label for="cuisine-tonkatsu">🐷 Tonkatsu <span class="cuisine-count">({category_counts.get('Tonkatsu', 0)})</span></label>
+                </div>
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-unagi" value="Unagi">
+                    <label for="cuisine-unagi">🐟 Unagi <span class="cuisine-count">({category_counts.get('Unagi', 0)})</span></label>
+                </div>
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-japanese" value="Japanese">
+                    <label for="cuisine-japanese">🍱 Japanese Cuisine <span class="cuisine-count">({category_counts.get('Japanese', 0)})</span></label>
+                </div>
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-soba" value="Soba">
+                    <label for="cuisine-soba">🥢 Soba <span class="cuisine-count">({category_counts.get('Soba', 0)})</span></label>
+                </div>
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-udon" value="Udon">
+                    <label for="cuisine-udon">🍲 Udon <span class="cuisine-count">({category_counts.get('Udon', 0)})</span></label>
+                </div>
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-curry" value="Curry">
+                    <label for="cuisine-curry">🍛 Curry <span class="cuisine-count">({category_counts.get('Curry', 0)})</span></label>
+                </div>
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-bakery" value="Bakery">
+                    <label for="cuisine-bakery">🥐 Bakery <span class="cuisine-count">({category_counts.get('Bakery', 0)})</span></label>
+                </div>
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-desserts" value="Desserts">
+                    <label for="cuisine-desserts">🍰 Desserts <span class="cuisine-count">({category_counts.get('Desserts', 0)})</span></label>
+                </div>
+            </div>
+        </div>
+        
+        <button id="gps-btn" class="gps-btn">📍 Enable GPS Tracking</button>
+    </div>
+    
+    <div id="map"></div>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Embedded restaurant data
+        const restaurants = {json.dumps(geojson, ensure_ascii=False)};
+        
+        // Initialize map (centered on Tokyo)
+        const map = L.map('map').setView([35.6762, 139.6503], 12);
+        
+        // Add tile layer
+        L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }}).addTo(map);
+        
+        let userMarker = null;
+        let userLocation = null;
+        let gpsActive = false;
+        let markers = [];
+        
+        // Calculate distance between two points
+        function getDistance(lat1, lon1, lat2, lon2) {{
+            const R = 6371; // Earth radius in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                     Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }}
+        
+        // Create popup content
+        function createPopup(props) {{
+            let distanceHtml = '';
+            if (userLocation) {{
+                const [lat, lng] = userLocation;
+                const dist = getDistance(lat, lng, props.lat, props.lng);
+                distanceHtml = `<div class="popup-distance">📏 ${{dist.toFixed(2)}} km away</div>`;
+            }}
+            
+            return `
+                <div class="popup-name">${{props.name}}</div>
+                <div class="popup-rating">
+                    <span>📊 Tabelog: ${{props.tabelog_rating}}</span>
+                    <span>⭐ Google: ${{props.google_rating}}</span>
+                </div>
+                <div class="popup-info">🍽️ ${{props.cuisine}}</div>
+                <div class="popup-info">📍 ${{props.area}}</div>
+                <div class="popup-info">💬 ${{props.google_reviews}} reviews</div>
+                ${{distanceHtml}}
+            `;
+        }}
+        
+        // Get selected cuisines
+        function getSelectedCuisines() {{
+            const checkboxes = document.querySelectorAll('.cuisine-option input[type="checkbox"]:checked');
+            return Array.from(checkboxes).map(cb => cb.value);
+        }}
+        
+        // Add markers
+        function addMarkers() {{
+            const minRating = parseFloat(document.getElementById('rating-filter').value);
+            const selectedCuisines = getSelectedCuisines();
+            
+            // Clear existing markers
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            
+            // Filter and add new markers
+            let count = 0;
+            restaurants.features.forEach(feature => {{
+                const props = feature.properties;
+                const coords = feature.geometry.coordinates;
+                
+                // Rating filter
+                if (props.google_rating < minRating) return;
+                
+                // Cuisine filter (if any selected)
+                if (selectedCuisines.length > 0) {{
+                    const hasMatch = selectedCuisines.some(cuisine => 
+                        props.categories && props.categories.includes(cuisine)
+                    );
+                    if (!hasMatch) return;
+                }}
+                
+                const marker = L.circleMarker([coords[1], coords[0]], {{
+                    radius: 6,
+                    fillColor: props.google_rating >= 4.7 ? '#22c55e' : 
+                              props.google_rating >= 4.5 ? '#3b82f6' : '#667eea',
+                    color: 'white',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }});
+                
+                marker.bindPopup(createPopup({{
+                    ...props,
+                    lat: coords[1],
+                    lng: coords[0]
+                }}));
+                
+                marker.addTo(map);
+                markers.push(marker);
+                count++;
+            }});
+            
+            // Update stats
+            const cuisineText = selectedCuisines.length > 0 ? 
+                ` • ${{selectedCuisines.join(', ')}}` : '';
+            document.querySelector('.stats').textContent = 
+                `${{count}} Restaurants • Google ${{minRating}}+${{cuisineText}}`;
+        }}
+        
+        // GPS tracking
+        function enableGPS() {{
+            if (gpsActive) {{
+                gpsActive = false;
+                document.getElementById('gps-btn').textContent = '📍 Enable GPS Tracking';
+                document.getElementById('gps-btn').classList.remove('active');
+                if (userMarker) {{
+                    map.removeLayer(userMarker);
+                    userMarker = null;
+                }}
+                userLocation = null;
+                return;
+            }}
+            
+            if (!navigator.geolocation) {{
+                alert('GPS not supported by your browser');
+                return;
+            }}
+            
+            gpsActive = true;
+            document.getElementById('gps-btn').textContent = '📍 GPS Active';
+            document.getElementById('gps-btn').classList.add('active');
+            
+            navigator.geolocation.watchPosition(
+                (position) => {{
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    userLocation = [lat, lng];
+                    
+                    // Update or create user marker
+                    if (userMarker) {{
+                        userMarker.setLatLng([lat, lng]);
+                    }} else {{
+                        userMarker = L.marker([lat, lng], {{
+                            icon: L.divIcon({{
+                                className: 'user-marker',
+                                html: '<div style="background: #3b82f6; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>',
+                                iconSize: [20, 20]
+                            }})
+                        }}).addTo(map);
+                    }}
+                    
+                    // Center map on user
+                    map.setView([lat, lng], 14);
+                }},
+                (error) => {{
+                    alert('Could not get your location');
+                    gpsActive = false;
+                    document.getElementById('gps-btn').textContent = '📍 Enable GPS Tracking';
+                    document.getElementById('gps-btn').classList.remove('active');
+                }},
+                {{
+                    enableHighAccuracy: true,
+                    maximumAge: 10000,
+                    timeout: 5000
+                }}
+            );
+        }}
+        
+        // Event listeners
+        document.getElementById('rating-filter').addEventListener('change', addMarkers);
+        document.getElementById('gps-btn').addEventListener('click', enableGPS);
+        
+        // Cuisine filter checkboxes
+        document.querySelectorAll('.cuisine-option input[type="checkbox"]').forEach(checkbox => {{
+            checkbox.addEventListener('change', addMarkers);
+        }});
+        
+        // Initial load
+        addMarkers();
+    </script>
+</body>
+</html>'''
+
+# Save HTML
+with open('index.html', 'w', encoding='utf-8') as f:
+    f.write(html)
+
+print("\n✅ Built index.html with cuisine filters")
+print(f"📊 Total: {len(features)} restaurants with coordinates")

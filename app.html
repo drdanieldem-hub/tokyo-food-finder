@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🍜 Tokyo Food Finder</title>
+    
+    <!-- Leaflet (OpenStreetMap) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #ff6600, #ff9900);
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+        
+        .header h1 {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .search-box {
+            display: flex;
+            gap: 10px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .search-box input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .filter-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .filter-btn {
+            background: rgba(255,255,255,0.2);
+            border: 2px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .filter-btn.active {
+            background: white;
+            color: #ff6600;
+            border-color: white;
+        }
+        
+        #map {
+            flex: 1;
+            width: 100%;
+        }
+        
+        .leaflet-popup-content {
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .popup-name {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        
+        .popup-rating {
+            background: #ff6600;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .popup-area {
+            color: #666;
+            font-size: 12px;
+        }
+        
+        .stats {
+            background: rgba(0,0,0,0.7);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🍜 Tokyo Food Finder</h1>
+        <div class="search-box">
+            <input type="text" id="search" placeholder="Search restaurants...">
+        </div>
+        <div class="filter-buttons">
+            <button class="filter-btn active" data-rating="3.4">All (3.4+)</button>
+            <button class="filter-btn" data-rating="3.7">Good (3.7+)</button>
+            <button class="filter-btn" data-rating="4.0">Great (4.0+)</button>
+            <button class="filter-btn" data-rating="4.3">Elite (4.3+)</button>
+        </div>
+        <div class="stats" id="stats">Loading...</div>
+    </div>
+    
+    <div id="map"></div>
+    
+    <script>
+        // === RESTAURANT DATA WILL BE EMBEDDED HERE ===
+        const RESTAURANTS_DATA = null; // Will be replaced with actual data
+        
+        // Initialize
+        let map;
+        let markers = [];
+        let allRestaurants = [];
+        let currentFilter = 3.4;
+        
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([35.6762, 139.6503], 12); // Tokyo center
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+        }
+        
+        // Load restaurants
+        function loadRestaurants() {
+            if (!RESTAURANTS_DATA) {
+                document.getElementById('stats').textContent = '❌ No data loaded';
+                return;
+            }
+            
+            allRestaurants = RESTAURANTS_DATA.restaurants || [];
+            document.getElementById('stats').textContent = 
+                `📊 ${allRestaurants.length} restaurants loaded`;
+            
+            filterAndDisplay();
+        }
+        
+        // Filter and display
+        function filterAndDisplay() {
+            // Clear existing markers
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            
+            // Filter
+            const searchText = document.getElementById('search').value.toLowerCase();
+            const filtered = allRestaurants.filter(r => {
+                const meetsRating = r.tabelog_rating >= currentFilter;
+                const meetsSearch = !searchText || 
+                    r.name.toLowerCase().includes(searchText) ||
+                    r.area.toLowerCase().includes(searchText);
+                return meetsRating && meetsSearch;
+            });
+            
+            // Add markers
+            filtered.forEach(r => {
+                const color = r.tabelog_rating >= 4.3 ? '#ff0000' : 
+                              r.tabelog_rating >= 4.0 ? '#ff6600' : 
+                              r.tabelog_rating >= 3.7 ? '#ff9900' : '#ffcc00';
+                
+                const marker = L.circleMarker([r.lat, r.lng], {
+                    radius: 8,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                });
+                
+                marker.bindPopup(`
+                    <div class="popup-name">${r.name}</div>
+                    <div class="popup-rating">${r.tabelog_rating}</div>
+                    <div class="popup-area">${r.area}</div>
+                `);
+                
+                marker.addTo(map);
+                markers.push(marker);
+            });
+            
+            // Update stats
+            document.getElementById('stats').textContent = 
+                `📊 Showing ${filtered.length} of ${allRestaurants.length} restaurants`;
+        }
+        
+        // Event listeners
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = parseFloat(btn.dataset.rating);
+                filterAndDisplay();
+            });
+        });
+        
+        document.getElementById('search').addEventListener('input', filterAndDisplay);
+        
+        // Initialize
+        initMap();
+        loadRestaurants();
+    </script>
+</body>
+</html>
