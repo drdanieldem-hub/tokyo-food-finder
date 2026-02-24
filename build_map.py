@@ -447,7 +447,7 @@ html = f'''<!DOCTYPE html>
                 }}
                 
                 const marker = L.circleMarker([coords[1], coords[0]], {{
-                    radius: 8,  // Larger dots
+                    radius: 6.4,  // 20% smaller than before
                     fillColor: props.google_rating >= 4.7 ? '#10b981' :  // Bright emerald green
                               props.google_rating >= 4.5 ? '#3b82f6' :  // Bright blue
                               '#8b5cf6',  // Bright purple/violet
