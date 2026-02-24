@@ -306,11 +306,16 @@
                 distanceHtml = `<div class="popup-distance">📏 ${dist.toFixed(2)} km away</div>`;
             }
             
+            // Google Maps link
+            const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${props.lat},${props.lng}`;
+            
             return `
                 <div class="popup-name">${props.name}</div>
                 <div class="popup-rating">
                     <span>📊 Tabelog: ${props.tabelog_rating}</span>
-                    <span>⭐ Google: ${props.google_rating}</span>
+                    <a href="${mapsUrl}" target="_blank" style="text-decoration: none; color: inherit;">
+                        <span style="cursor: pointer; border-bottom: 2px solid #667eea;">⭐ Google: ${props.google_rating}</span>
+                    </a>
                 </div>
                 <div class="popup-info">🍽️ ${props.cuisine}</div>
                 <div class="popup-info">📍 ${props.area}</div>
