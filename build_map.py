@@ -5,7 +5,7 @@ Build static HTML map with embedded restaurant data
 import json
 
 # Load restaurant data
-with open('final_restaurants_merged.json', 'r', encoding='utf-8') as f:
+with open('final_restaurants.json', 'r', encoding='utf-8') as f:
     restaurants = json.load(f)
 
 print(f"Loading {len(restaurants)} restaurants...")
@@ -446,24 +446,11 @@ html = f'''<!DOCTYPE html>
                     if (!hasMatch) return;
                 }}
                 
-                // Color logic: 5-tier system based on Tabelog + Google ratings
-                let fillColor;
-                if (props.tabelog_rating >= 3.73) {{
-                    // High Tabelog (3.73+): Use Google rating colors
-                    fillColor = props.google_rating >= 4.7 ? '#10b981' :  // Emerald green
-                               props.google_rating >= 4.5 ? '#3b82f6' :  // Bright blue
-                               '#8b5cf6';  // Purple
-                }} else if (props.tabelog_rating >= 3.5) {{
-                    // Mid Tabelog (3.5-3.73): Amber/Orange
-                    fillColor = '#fb923c';  // Warm orange
-                }} else {{
-                    // Lower Tabelog (3.4-3.5): Pale beige
-                    fillColor = '#d1d5db';  // Light gray
-                }}
-                
                 const marker = L.circleMarker([coords[1], coords[0]], {{
                     radius: 6.4,
-                    fillColor: fillColor,
+                    fillColor: props.google_rating >= 4.7 ? '#10b981' :  // Bright emerald green
+                              props.google_rating >= 4.5 ? '#3b82f6' :  // Bright blue
+                              '#8b5cf6',  // Bright purple/violet
                     color: '#ffffff',  // White border
                     weight: 2.5,
                     opacity: 1,
