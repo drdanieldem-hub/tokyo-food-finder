@@ -4,8 +4,8 @@ Build static HTML map with embedded restaurant data
 """
 import json
 
-# Load restaurant data
-with open('final_restaurants.json', 'r', encoding='utf-8') as f:
+# Load restaurant data (with prices and hours)
+with open('final_restaurants_with_prices.json', 'r', encoding='utf-8') as f:
     restaurants = json.load(f)
 
 print(f"Loading {len(restaurants)} restaurants...")
@@ -70,7 +70,10 @@ for r in restaurants:
                 "area": r.get('area', ''),
                 "address": r.get('google_address', ''),
                 "categories": categories,
-                "place_id": r.get('google_place_id', '')
+                "place_id": r.get('google_place_id', ''),
+                "price_level": r.get('price_level'),
+                "opening_hours": r.get('opening_hours', []),
+                "open_now": r.get('open_now')
             }
         }
         features.append(feature)
@@ -548,6 +551,15 @@ html = f'''<!DOCTYPE html>
                 ? `https://www.google.com/maps/search/?api=1&query=${{encodeURIComponent(props.name)}}&query_place_id=${{props.place_id}}`
                 : `https://www.google.com/maps/search/?api=1&query=${{props.lat}},${{props.lng}}`;
             
+            // Price level indicator
+            let priceHtml = '';
+            if (props.price_level !== null && props.price_level !== undefined) {{
+                const priceSymbols = ['¥', '¥¥', '¥¥¥', '¥¥¥¥', '¥¥¥¥¥'];
+                const priceLabels = ['Free', 'Inexpensive', 'Moderate', 'Expensive', 'Very Expensive'];
+                const priceIndex = Math.min(props.price_level, 4);
+                priceHtml = `<div class="popup-info">💴 ${{priceSymbols[priceIndex]}} <span style="color: #999; font-size: 11px;">(${{priceLabels[priceIndex]}})</span></div>`;
+            }}
+            
             return `
                 <div class="popup-name">${{props.name}}</div>
                 <div class="popup-rating">
@@ -556,6 +568,7 @@ html = f'''<!DOCTYPE html>
                         <span style="cursor: pointer; border-bottom: 2px solid #667eea;">⭐ Google: ${{props.google_rating}}</span>
                     </a>
                 </div>
+                ${{priceHtml}}
                 <div class="popup-info">🍽️ ${{props.cuisine}}</div>
                 <div class="popup-info">📍 ${{props.area}}</div>
                 <div class="popup-info">💬 ${{props.google_reviews}} reviews</div>
