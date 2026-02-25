@@ -505,9 +505,10 @@ html = f'''<!DOCTYPE html>
             maxZoom: 19
         }});
         
-        const darkTiles = L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{{z}}/{{x}}/{{y}}{{r}}.png', {{
-            attribution: '© Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors',
-            maxZoom: 20
+        const darkTiles = L.tileLayer('https://cartodb-basemaps-{{s}}.global.ssl.fastly.net/dark_all/{{z}}/{{x}}/{{y}}.png', {{
+            attribution: '© OpenStreetMap contributors, © CARTO',
+            subdomains: 'abcd',
+            maxZoom: 19
         }});
         
         const darkLabels = null;
