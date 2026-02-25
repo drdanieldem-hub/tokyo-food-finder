@@ -214,47 +214,6 @@ html = f'''<!DOCTYPE html>
             font-size: 14px;
         }}
         
-        .search-box {{
-            position: relative;
-            margin-bottom: 15px;
-        }}
-        
-        .search-box input {{
-            width: 100%;
-            padding: 10px 35px 10px 10px;
-            border: 2px solid #667eea;
-            border-radius: 8px;
-            font-size: 14px;
-            box-sizing: border-box;
-        }}
-        
-        .search-box input:focus {{
-            outline: none;
-            border-color: #764ba2;
-        }}
-        
-        .search-box .clear-btn {{
-            position: absolute;
-            right: 8px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            font-size: 18px;
-            color: #999;
-            cursor: pointer;
-            padding: 4px;
-            display: none;
-        }}
-        
-        .search-box .clear-btn:hover {{
-            color: #333;
-        }}
-        
-        .search-box input:not(:placeholder-shown) ~ .clear-btn {{
-            display: block;
-        }}
-        
         .cuisine-filter {{
             margin-top: 15px;
             padding-top: 15px;
@@ -363,11 +322,6 @@ html = f'''<!DOCTYPE html>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <h3 style="margin: 0;">Filters</h3>
             <button onclick="toggleControls()" style="background: #f3f4f6; border: none; font-size: 24px; cursor: pointer; padding: 8px; color: #333; border-radius: 5px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">✕</button>
-        </div>
-        
-        <div class="search-box">
-            <input type="text" id="search-input" placeholder="🔍 Search restaurants..." autocomplete="off">
-            <button class="clear-btn" onclick="clearSearch()">✕</button>
         </div>
         
         <div class="filter">
@@ -513,7 +467,6 @@ html = f'''<!DOCTYPE html>
         function addMarkers() {{
             const minRating = parseFloat(document.getElementById('rating-filter').value);
             const selectedCuisines = getSelectedCuisines();
-            const searchText = document.getElementById('search-input').value.toLowerCase().trim();
             
             // Clear existing markers
             markers.forEach(m => map.removeLayer(m));
@@ -524,14 +477,6 @@ html = f'''<!DOCTYPE html>
             restaurants.features.forEach(feature => {{
                 const props = feature.properties;
                 const coords = feature.geometry.coordinates;
-                
-                // Search filter
-                if (searchText) {{
-                    const nameMatch = props.name.toLowerCase().includes(searchText);
-                    const cuisineMatch = props.cuisine.toLowerCase().includes(searchText);
-                    const areaMatch = props.area.toLowerCase().includes(searchText);
-                    if (!nameMatch && !cuisineMatch && !areaMatch) return;
-                }}
                 
                 // Rating filter
                 if (props.google_rating < minRating) return;
@@ -567,16 +512,10 @@ html = f'''<!DOCTYPE html>
             }});
             
             // Update stats
-            let statsText = `${{count}} Restaurant${{count !== 1 ? 's' : ''}}`;
-            if (searchText) {{
-                statsText += ` • Search: "${{searchText}}"`;
-            }} else {{
-                statsText += ` • Google ${{minRating}}+`;
-                if (selectedCuisines.length > 0) {{
-                    statsText += ` • ${{selectedCuisines.join(', ')}}`;
-                }}
-            }}
-            document.querySelector('.stats').textContent = statsText;
+            const cuisineText = selectedCuisines.length > 0 ? 
+                ` • ${{selectedCuisines.join(', ')}}` : '';
+            document.querySelector('.stats').textContent = 
+                `${{count}} Restaurants • Google ${{minRating}}+${{cuisineText}}`;
         }}
         
         // GPS tracking
@@ -641,15 +580,6 @@ html = f'''<!DOCTYPE html>
         // Event listeners
         document.getElementById('rating-filter').addEventListener('change', addMarkers);
         document.getElementById('gps-btn').addEventListener('click', enableGPS);
-        
-        // Search input - live filtering
-        document.getElementById('search-input').addEventListener('input', addMarkers);
-        
-        // Clear search function
-        function clearSearch() {{
-            document.getElementById('search-input').value = '';
-            addMarkers();
-        }}
         
         // Cuisine filter checkboxes
         document.querySelectorAll('.cuisine-option input[type="checkbox"]').forEach(checkbox => {{
