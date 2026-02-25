@@ -478,12 +478,12 @@
             
             // Open/Closed status
             let statusHtml = '';
-            if (props.open_now !== null && props.open_now !== undefined) {
-                const isOpen = props.open_now;
-                const statusColor = isOpen ? '#10b981' : '#ef4444';
-                const statusText = isOpen ? 'Open now' : 'Closed';
-                const statusIcon = isOpen ? '🟢' : '🔴';
-                statusHtml = `<div style="display: inline-block; background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-bottom: 8px;">${statusIcon} ${statusText}</div>`;
+            if (props.open_now === true) {
+                statusHtml = `<div style="display: inline-block; background: #10b981; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-bottom: 8px;">🟢 Open now</div>`;
+            } else if (props.open_now === false) {
+                statusHtml = `<div style="display: inline-block; background: #ef4444; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-bottom: 8px;">🔴 Closed</div>`;
+            } else {
+                statusHtml = `<div style="display: inline-block; background: #94a3b8; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-bottom: 8px;">⚪ No hours data</div>`;
             }
             
             return `
@@ -528,9 +528,9 @@
                 // Rating filter
                 if (props.google_rating < minRating) return;
                 
-                // Open Now filter
+                // Open Now filter - only exclude if explicitly closed
                 if (openNowOnly) {
-                    if (props.open_now !== true) return;
+                    if (props.open_now === false) return;
                 }
                 
                 // Cuisine filter (if any selected)
