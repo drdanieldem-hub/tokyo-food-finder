@@ -4,8 +4,8 @@ Build static HTML map with embedded restaurant data
 """
 import json
 
-# Load restaurant data (with prices, hours, and photos)
-with open('final_restaurants_with_photos.json', 'r', encoding='utf-8') as f:
+# Load restaurant data (with prices, hours, and multiple photos)
+with open('final_restaurants_multi_photos.json', 'r', encoding='utf-8') as f:
     restaurants = json.load(f)
 
 print(f"Loading {len(restaurants)} restaurants...")
@@ -74,7 +74,7 @@ for r in restaurants:
                 "price_level": r.get('price_level'),
                 "opening_hours": r.get('opening_hours', []),
                 "open_now": r.get('open_now'),
-                "photo_url": r.get('photo_url')
+                "photo_urls": r.get('photo_urls', [])
             }
         }
         features.append(feature)
@@ -399,6 +399,69 @@ html = f'''<!DOCTYPE html>
             font-weight: 600;
             margin-top: 8px;
         }}
+        
+        /* Photo carousel */
+        .photo-carousel {{
+            position: relative;
+            width: 100%;
+            height: 150px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            overflow: hidden;
+        }}
+        
+        .photo-carousel img {{
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            display: none;
+        }}
+        
+        .photo-carousel img.active {{
+            display: block;
+        }}
+        
+        .carousel-btn {{
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0,0,0,0.5);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }}
+        
+        .carousel-btn:hover {{
+            background: rgba(0,0,0,0.7);
+        }}
+        
+        .carousel-btn.prev {{
+            left: 5px;
+        }}
+        
+        .carousel-btn.next {{
+            right: 5px;
+        }}
+        
+        .photo-counter {{
+            position: absolute;
+            bottom: 5px;
+            right: 8px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }}
     </style>
 </head>
 <body>
@@ -568,10 +631,22 @@ html = f'''<!DOCTYPE html>
                 priceHtml = `<div class="popup-info">💴 ${{priceSymbols[priceIndex]}} <span style="color: #999; font-size: 11px;">(${{priceLabels[priceIndex]}})</span></div>`;
             }}
             
-            // Photo thumbnail
+            // Photo carousel
             let photoHtml = '';
-            if (props.photo_url) {{
-                photoHtml = `<img src="${{props.photo_url}}" style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 10px;" alt="${{props.name}}">`;
+            if (props.photo_urls && props.photo_urls.length > 0) {{
+                const carouselId = `carousel-${{Math.random().toString(36).substr(2, 9)}}`;
+                const photos = props.photo_urls.map((url, idx) => 
+                    `<img src="${{url}}" class="${{idx === 0 ? 'active' : ''}}" alt="${{props.name}}">`
+                ).join('');
+                
+                const prevBtn = props.photo_urls.length > 1 ? 
+                    `<button class="carousel-btn prev" onclick="changePhoto('${{carouselId}}', -1)">‹</button>` : '';
+                const nextBtn = props.photo_urls.length > 1 ? 
+                    `<button class="carousel-btn next" onclick="changePhoto('${{carouselId}}', 1)">›</button>` : '';
+                const counter = props.photo_urls.length > 1 ? 
+                    `<div class="photo-counter"><span id="${{carouselId}}-counter">1</span>/${{props.photo_urls.length}}</div>` : '';
+                
+                photoHtml = `<div class="photo-carousel" id="${{carouselId}}">${{photos}}${{prevBtn}}${{nextBtn}}${{counter}}</div>`;
             }}
             
             // Open/Closed status
@@ -741,6 +816,25 @@ html = f'''<!DOCTYPE html>
         document.querySelectorAll('.cuisine-option input[type="checkbox"]').forEach(checkbox => {{
             checkbox.addEventListener('change', addMarkers);
         }});
+        
+        // Photo carousel navigation
+        window.changePhoto = function(carouselId, direction) {{
+            const carousel = document.getElementById(carouselId);
+            if (!carousel) return;
+            
+            const images = carousel.querySelectorAll('img');
+            const counter = document.getElementById(carouselId + '-counter');
+            
+            let currentIndex = Array.from(images).findIndex(img => img.classList.contains('active'));
+            images[currentIndex].classList.remove('active');
+            
+            currentIndex = (currentIndex + direction + images.length) % images.length;
+            images[currentIndex].classList.add('active');
+            
+            if (counter) {{
+                counter.textContent = currentIndex + 1;
+            }}
+        }}
         
         // Toggle controls visibility
         function toggleControls() {{
