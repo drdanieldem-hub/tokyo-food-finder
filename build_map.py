@@ -4,8 +4,8 @@ Build static HTML map with embedded restaurant data
 """
 import json
 
-# Load restaurant data (with prices and hours)
-with open('final_restaurants_with_prices.json', 'r', encoding='utf-8') as f:
+# Load restaurant data (with prices, hours, and photos)
+with open('final_restaurants_with_photos.json', 'r', encoding='utf-8') as f:
     restaurants = json.load(f)
 
 print(f"Loading {len(restaurants)} restaurants...")
@@ -73,7 +73,8 @@ for r in restaurants:
                 "place_id": r.get('google_place_id', ''),
                 "price_level": r.get('price_level'),
                 "opening_hours": r.get('opening_hours', []),
-                "open_now": r.get('open_now')
+                "open_now": r.get('open_now'),
+                "photo_url": r.get('photo_url')
             }
         }
         features.append(feature)
@@ -567,6 +568,12 @@ html = f'''<!DOCTYPE html>
                 priceHtml = `<div class="popup-info">💴 ${{priceSymbols[priceIndex]}} <span style="color: #999; font-size: 11px;">(${{priceLabels[priceIndex]}})</span></div>`;
             }}
             
+            // Photo thumbnail
+            let photoHtml = '';
+            if (props.photo_url) {{
+                photoHtml = `<img src="${{props.photo_url}}" style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 10px;" alt="${{props.name}}">`;
+            }}
+            
             // Open/Closed status
             let statusHtml = '';
             if (props.open_now === true) {{
@@ -578,6 +585,7 @@ html = f'''<!DOCTYPE html>
             }}
             
             return `
+                ${{photoHtml}}
                 <div class="popup-name">${{props.name}}</div>
                 ${{statusHtml}}
                 <div class="popup-rating">
