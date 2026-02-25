@@ -321,7 +321,7 @@ html = f'''<!DOCTYPE html>
     <div class="controls expanded" id="controls">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <h3 style="margin: 0;">Filters</h3>
-            <button onclick="toggleControls()" style="background: none; border: none; font-size: 20px; cursor: pointer; padding: 0; color: #666;">✕</button>
+            <button onclick="toggleControls()" style="background: #f3f4f6; border: none; font-size: 24px; cursor: pointer; padding: 8px; color: #333; border-radius: 5px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">✕</button>
         </div>
         
         <div class="filter">
@@ -602,13 +602,19 @@ html = f'''<!DOCTYPE html>
             }}
         }}
         
-        // Auto-collapse on mobile
-        if (window.innerWidth < 768) {{
-            toggleControls();
-        }}
-        
         // Initial load
         addMarkers();
+        
+        // Auto-collapse on mobile (run after DOM is ready)
+        window.addEventListener('load', function() {{
+            if (window.innerWidth < 768) {{
+                const controls = document.getElementById('controls');
+                const toggleBtn = document.getElementById('toggle-btn');
+                controls.classList.remove('expanded');
+                controls.classList.add('collapsed');
+                toggleBtn.style.display = 'flex';
+            }}
+        }});
     </script>
 </body>
 </html>'''
