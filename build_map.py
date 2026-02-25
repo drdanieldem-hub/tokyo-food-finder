@@ -743,13 +743,18 @@ html = f'''<!DOCTYPE html>
             localStorage.setItem('darkMode', isDark ? 'true' : 'false');
         }}
         
-        // Load dark mode preference
+        // Load dark mode preference BEFORE creating markers
         const savedDarkMode = localStorage.getItem('darkMode');
         if (savedDarkMode === 'true') {{
-            toggleTheme();
+            document.body.classList.add('dark-mode');
+            document.getElementById('theme-icon').textContent = '☀️';
+            currentTiles = darkTiles;
+            map.removeLayer(lightTiles);
+            darkTiles.addTo(map);
+            darkLabels.addTo(map);
         }}
         
-        // Initial load
+        // Initial load (markers will check dark mode status)
         addMarkers();
         
         // Auto-collapse on mobile (run after DOM is ready)
