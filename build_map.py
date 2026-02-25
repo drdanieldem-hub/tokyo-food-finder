@@ -24,7 +24,8 @@ cuisine_categories = {
     'Udon': ['うどん', 'ウドン', 'Udon'],
     'Curry': ['カレー', 'Curry', 'カリー'],
     'Bakery': ['パン', 'ブーランジェリー', 'Bakery', 'ベーカリー'],
-    'Desserts': ['ケーキ', '和菓子', 'スイーツ', 'Dessert', 'パティスリー', 'たい焼き']
+    'Desserts': ['ケーキ', '和菓子', 'スイーツ', 'Dessert', 'パティスリー', 'たい焼き'],
+    'Pizza': ['ピザ', 'Pizza', 'Pizzeria', 'ピッツェリア', 'Trattoria', 'Italian']
 }
 
 def categorize_cuisine(cuisine_text):
@@ -556,6 +557,10 @@ html = f'''<!DOCTYPE html>
                 <div class="cuisine-option">
                     <input type="checkbox" id="cuisine-desserts" value="Desserts">
                     <label for="cuisine-desserts">🍰 Desserts <span class="cuisine-count">({category_counts.get('Desserts', 0)})</span></label>
+                </div>
+                <div class="cuisine-option">
+                    <input type="checkbox" id="cuisine-pizza" value="Pizza">
+                    <label for="cuisine-pizza">🍕 Pizza <span class="cuisine-count">({category_counts.get('Pizza', 0)})</span></label>
                 </div>
             </div>
         </div>
