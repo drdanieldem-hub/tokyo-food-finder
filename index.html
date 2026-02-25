@@ -15,6 +15,76 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
+            transition: background-color 0.3s ease;
+        }
+        
+        /* Dark mode styles */
+        body.dark-mode {
+            background-color: #1a1a1a;
+        }
+        
+        body.dark-mode .header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        }
+        
+        body.dark-mode .controls {
+            background: #1e293b;
+            color: #e2e8f0;
+        }
+        
+        body.dark-mode .controls h3,
+        body.dark-mode .filter label {
+            color: #e2e8f0;
+        }
+        
+        body.dark-mode .filter select {
+            background: #0f172a;
+            color: #e2e8f0;
+            border-color: #334155;
+        }
+        
+        body.dark-mode .cuisine-option label {
+            color: #cbd5e1;
+        }
+        
+        body.dark-mode .toggle-btn {
+            background: #1e293b;
+            color: #e2e8f0;
+        }
+        
+        body.dark-mode .toggle-btn:hover {
+            background: #334155;
+        }
+        
+        body.dark-mode .gps-btn {
+            background: #475569;
+            color: #e2e8f0;
+        }
+        
+        body.dark-mode .gps-btn:hover {
+            background: #64748b;
+        }
+        
+        body.dark-mode .gps-btn.active {
+            background: #10b981;
+        }
+        
+        body.dark-mode .leaflet-popup-content-wrapper {
+            background: #1e293b;
+            color: #e2e8f0;
+        }
+        
+        body.dark-mode .popup-name {
+            color: #e2e8f0;
+        }
+        
+        body.dark-mode .popup-rating span {
+            background: #334155;
+            color: #cbd5e1;
+        }
+        
+        body.dark-mode .popup-info {
+            color: #94a3b8;
         }
         
         #map {
@@ -49,6 +119,25 @@
         .stats {
             font-size: 14px;
             opacity: 0.9;
+        }
+        
+        .theme-toggle {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 20px;
+            transition: background 0.3s ease;
+            margin-left: 10px;
+        }
+        
+        .theme-toggle:hover {
+            background: rgba(255,255,255,0.3);
         }
         
         .controls {
@@ -223,7 +312,12 @@
 <body>
     <div class="header">
         <h1>🗼 Tokyo Food Finder</h1>
-        <div class="stats">950 Restaurants • Tabelog 3.4+ & Google 4.2+</div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="stats">950 Restaurants • Tabelog 3.4+ & Google 4.2+</div>
+            <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
+                <span id="theme-icon">🌙</span>
+            </button>
+        </div>
     </div>
     
     <button class="toggle-btn" id="toggle-btn" onclick="toggleControls()">
@@ -317,11 +411,20 @@
         // Initialize map (centered on Tokyo)
         const map = L.map('map').setView([35.6762, 139.6503], 12);
         
-        // Add tile layer
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        // Tile layers
+        const lightTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19
-        }).addTo(map);
+        });
+        
+        const darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors, © CARTO',
+            maxZoom: 19
+        });
+        
+        // Start with light tiles
+        let currentTiles = lightTiles;
+        currentTiles.addTo(map);
         
         let userMarker = null;
         let userLocation = null;
@@ -512,6 +615,30 @@
                 controls.classList.add('expanded');
                 toggleBtn.style.display = 'none';
             }
+        }
+        
+        // Dark mode toggle
+        function toggleTheme() {
+            const body = document.body;
+            const icon = document.getElementById('theme-icon');
+            const isDark = body.classList.toggle('dark-mode');
+            
+            // Swap map tiles
+            map.removeLayer(currentTiles);
+            currentTiles = isDark ? darkTiles : lightTiles;
+            currentTiles.addTo(map);
+            
+            // Update icon
+            icon.textContent = isDark ? '☀️' : '🌙';
+            
+            // Save preference
+            localStorage.setItem('darkMode', isDark ? 'true' : 'false');
+        }
+        
+        // Load dark mode preference
+        const savedDarkMode = localStorage.getItem('darkMode');
+        if (savedDarkMode === 'true') {
+            toggleTheme();
         }
         
         // Initial load
