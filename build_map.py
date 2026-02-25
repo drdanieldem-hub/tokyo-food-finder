@@ -431,6 +431,13 @@ html = f'''<!DOCTYPE html>
             </select>
         </div>
         
+        <div class="filter" style="padding: 10px 0; border-bottom: 1px solid #eee; margin-bottom: 15px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="open-now-filter" style="cursor: pointer;">
+                <span style="font-weight: 600;">🕒 Open Now Only</span>
+            </label>
+        </div>
+        
         <div class="cuisine-filter">
             <label style="font-weight: 600; margin-bottom: 8px;">Cuisine Type</label>
             <div class="cuisine-options">
@@ -560,8 +567,19 @@ html = f'''<!DOCTYPE html>
                 priceHtml = `<div class="popup-info">💴 ${{priceSymbols[priceIndex]}} <span style="color: #999; font-size: 11px;">(${{priceLabels[priceIndex]}})</span></div>`;
             }}
             
+            // Open/Closed status
+            let statusHtml = '';
+            if (props.open_now !== null && props.open_now !== undefined) {{
+                const isOpen = props.open_now;
+                const statusColor = isOpen ? '#10b981' : '#ef4444';
+                const statusText = isOpen ? 'Open now' : 'Closed';
+                const statusIcon = isOpen ? '🟢' : '🔴';
+                statusHtml = `<div style="display: inline-block; background: ${{statusColor}}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; margin-bottom: 8px;">${{statusIcon}} ${{statusText}}</div>`;
+            }}
+            
             return `
                 <div class="popup-name">${{props.name}}</div>
+                ${{statusHtml}}
                 <div class="popup-rating">
                     <span>📊 Tabelog: ${{props.tabelog_rating}}</span>
                     <a href="${{mapsUrl}}" target="_blank" style="text-decoration: none; color: inherit;">
@@ -586,6 +604,7 @@ html = f'''<!DOCTYPE html>
         function addMarkers() {{
             const minRating = parseFloat(document.getElementById('rating-filter').value);
             const selectedCuisines = getSelectedCuisines();
+            const openNowOnly = document.getElementById('open-now-filter').checked;
             
             // Clear existing markers
             markers.forEach(m => map.removeLayer(m));
@@ -599,6 +618,11 @@ html = f'''<!DOCTYPE html>
                 
                 // Rating filter
                 if (props.google_rating < minRating) return;
+                
+                // Open Now filter
+                if (openNowOnly) {{
+                    if (props.open_now !== true) return;
+                }}
                 
                 // Cuisine filter (if any selected)
                 if (selectedCuisines.length > 0) {{
@@ -702,6 +726,7 @@ html = f'''<!DOCTYPE html>
         
         // Event listeners
         document.getElementById('rating-filter').addEventListener('change', addMarkers);
+        document.getElementById('open-now-filter').addEventListener('change', addMarkers);
         document.getElementById('gps-btn').addEventListener('click', enableGPS);
         
         // Cuisine filter checkboxes
