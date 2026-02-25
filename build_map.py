@@ -437,9 +437,9 @@ html = f'''<!DOCTYPE html>
                 distanceHtml = `<div class="popup-distance">📏 ${{dist.toFixed(2)}} km away</div>`;
             }}
             
-            // Google Maps link using Place ID for full restaurant page
+            // Google Maps link - mobile-friendly format
             const mapsUrl = props.place_id 
-                ? `https://www.google.com/maps/place/?q=place_id:${{props.place_id}}`
+                ? `https://www.google.com/maps/search/?api=1&query=${{encodeURIComponent(props.name)}}&query_place_id=${{props.place_id}}`
                 : `https://www.google.com/maps/search/?api=1&query=${{props.lat}},${{props.lng}}`;
             
             return `
