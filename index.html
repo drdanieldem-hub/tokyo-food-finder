@@ -481,6 +481,7 @@
         </div>
         
         <button id="gps-btn" class="gps-btn">📍 Enable GPS Tracking</button>
+        <button id="install-btn" class="gps-btn" style="background: #10b981; display: none;">📲 Install App</button>
     </div>
     
     <div id="map"></div>
@@ -847,6 +848,37 @@
                     });
             });
         }
+        
+        // PWA Install Prompt
+        let deferredPrompt;
+        const installBtn = document.getElementById('install-btn');
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent Chrome 67 and earlier from automatically showing the prompt
+            e.preventDefault();
+            // Stash the event so it can be triggered later
+            deferredPrompt = e;
+            // Show the install button
+            installBtn.style.display = 'block';
+        });
+        
+        // Handle install button click
+        installBtn.addEventListener('click', async (e) => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                // Wait for the user to respond to the prompt
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log('User response to install prompt:', outcome);
+                deferredPrompt = null;
+                installBtn.style.display = 'none';
+            }
+        });
+        
+        // Hide button if app is already installed
+        window.addEventListener('appinstalled', (e) => {
+            console.log('App installed successfully!');
+            installBtn.style.display = 'none';
+        });
     </script>
 </body>
 </html>
