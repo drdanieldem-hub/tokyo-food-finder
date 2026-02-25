@@ -505,16 +505,12 @@ html = f'''<!DOCTYPE html>
             maxZoom: 19
         }});
         
-        const darkTiles = L.tileLayer('https://{{s}}.basemaps.cartocdn.com/dark_nolabels/{{z}}/{{x}}/{{y}}.png', {{
-            attribution: '© OpenStreetMap contributors, © CARTO',
-            maxZoom: 19
+        const darkTiles = L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{{z}}/{{x}}/{{y}}{{r}}.png', {{
+            attribution: '© Stadia Maps, © OpenMapTiles, © OpenStreetMap contributors',
+            maxZoom: 20
         }});
         
-        const darkLabels = L.tileLayer('https://{{s}}.basemaps.cartocdn.com/dark_only_labels/{{z}}/{{x}}/{{y}}.png', {{
-            attribution: '',
-            maxZoom: 19,
-            pane: 'shadowPane'
-        }});
+        const darkLabels = null;
         
         // Start with light tiles
         let currentTiles = lightTiles;
@@ -726,13 +722,6 @@ html = f'''<!DOCTYPE html>
             currentTiles = isDark ? darkTiles : lightTiles;
             currentTiles.addTo(map);
             
-            // Add/remove dark labels
-            if (isDark) {{
-                darkLabels.addTo(map);
-            }} else {{
-                map.removeLayer(darkLabels);
-            }}
-            
             // Update icon
             icon.textContent = isDark ? '☀️' : '🌙';
             
@@ -751,7 +740,6 @@ html = f'''<!DOCTYPE html>
             currentTiles = darkTiles;
             map.removeLayer(lightTiles);
             darkTiles.addTo(map);
-            darkLabels.addTo(map);
         }}
         
         // Initial load (markers will check dark mode status)
