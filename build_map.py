@@ -96,7 +96,19 @@ html = f'''<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tokyo Food Finder - 950 Top-Rated Restaurants</title>
+    <meta name="theme-color" content="#667eea">
+    <meta name="description" content="Discover top-rated restaurants in Tokyo with live GPS tracking, walking times, and filters.">
+    <title>Tokyo Food Finder - Top-Rated Restaurants</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Tokyo Food">
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * {{
@@ -566,6 +578,7 @@ html = f'''<!DOCTYPE html>
         </div>
         
         <button id="gps-btn" class="gps-btn">📍 Enable GPS Tracking</button>
+        <button id="install-btn" class="gps-btn" style="background: #10b981; display: none;">📲 Install App</button>
     </div>
     
     <div id="map"></div>
@@ -918,6 +931,50 @@ html = f'''<!DOCTYPE html>
                 controls.classList.add('collapsed');
                 toggleBtn.style.display = 'flex';
             }}
+        }});
+        
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {{
+            window.addEventListener('load', function() {{
+                navigator.serviceWorker.register('/tokyo-food-finder/sw.js')
+                    .then(registration => {{
+                        console.log('ServiceWorker registered:', registration.scope);
+                    }})
+                    .catch(err => {{
+                        console.log('ServiceWorker registration failed:', err);
+                    }});
+            }});
+        }}
+        
+        // PWA Install Prompt
+        let deferredPrompt;
+        const installBtn = document.getElementById('install-btn');
+        
+        window.addEventListener('beforeinstallprompt', (e) => {{
+            // Prevent Chrome 67 and earlier from automatically showing the prompt
+            e.preventDefault();
+            // Stash the event so it can be triggered later
+            deferredPrompt = e;
+            // Show the install button
+            installBtn.style.display = 'block';
+        }});
+        
+        // Handle install button click
+        installBtn.addEventListener('click', async (e) => {{
+            if (deferredPrompt) {{
+                deferredPrompt.prompt();
+                // Wait for the user to respond to the prompt
+                const {{ outcome }} = await deferredPrompt.userChoice;
+                console.log('User response to install prompt:', outcome);
+                deferredPrompt = null;
+                installBtn.style.display = 'none';
+            }}
+        }});
+        
+        // Hide button if app is already installed
+        window.addEventListener('appinstalled', (e) => {{
+            console.log('App installed successfully!');
+            installBtn.style.display = 'none';
         }});
     </script>
 </body>

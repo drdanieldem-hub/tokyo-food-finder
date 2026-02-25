@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tokyo-food-finder-v1';
+const CACHE_NAME = 'tokyo-food-finder-v7';
 const urlsToCache = [
   '/tokyo-food-finder/',
   '/tokyo-food-finder/index.html',
