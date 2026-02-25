@@ -417,9 +417,15 @@
             maxZoom: 19
         });
         
-        const darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+        const darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors, © CARTO',
             maxZoom: 19
+        });
+        
+        const darkLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png', {
+            attribution: '',
+            maxZoom: 19,
+            pane: 'shadowPane'
         });
         
         // Start with light tiles
@@ -504,12 +510,16 @@
                     if (!hasMatch) return;
                 }
                 
+                // Adjust marker style for dark mode
+                const isDarkMode = document.body.classList.contains('dark-mode');
+                const borderColor = isDarkMode ? '#1a1a1a' : '#ffffff';
+                
                 const marker = L.circleMarker([coords[1], coords[0]], {
                     radius: 6.4,
                     fillColor: props.google_rating >= 4.7 ? '#10b981' :  // Bright emerald green
                               props.google_rating >= 4.5 ? '#3b82f6' :  // Bright blue
                               '#8b5cf6',  // Bright purple/violet
-                    color: '#ffffff',  // White border
+                    color: borderColor,
                     weight: 2.5,
                     opacity: 1,
                     fillOpacity: 0.95
@@ -628,8 +638,18 @@
             currentTiles = isDark ? darkTiles : lightTiles;
             currentTiles.addTo(map);
             
+            // Add/remove dark labels
+            if (isDark) {
+                darkLabels.addTo(map);
+            } else {
+                map.removeLayer(darkLabels);
+            }
+            
             // Update icon
             icon.textContent = isDark ? '☀️' : '🌙';
+            
+            // Refresh markers to update border colors
+            addMarkers();
             
             // Save preference
             localStorage.setItem('darkMode', isDark ? 'true' : 'false');
