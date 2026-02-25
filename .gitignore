@@ -14,6 +14,23 @@ ENV/
 tabelog_raw.json
 not_found.json
 progress.json
+area_scrape_*.json
+final_restaurants.json
+final_restaurants_with_photos.json
+final_restaurants_with_prices.json
+final_restaurants_multi_photos.json
+
+# Development scripts (keep these local)
+scraper.py
+full_scrape.py
+scrape_areas.py
+resume_scrape.py
+fetch_prices.py
+fetch_photos.py
+fetch_multiple_photos.py
+count_restaurants.py
+count_jp.py
+create_icons.py
 
 # Temporary files
 *.log
