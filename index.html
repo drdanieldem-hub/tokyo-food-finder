@@ -516,13 +516,31 @@
             return R * c;
         }
         
+        // Calculate walking time from distance
+        function getWalkingTime(distanceKm) {
+            const walkingSpeed = 5; // km/h (average walking speed)
+            const timeHours = distanceKm / walkingSpeed;
+            const timeMinutes = Math.round(timeHours * 60);
+            
+            if (timeMinutes < 1) {
+                return 'less than 1 min';
+            } else if (timeMinutes < 60) {
+                return `${timeMinutes} min walk`;
+            } else {
+                const hours = Math.floor(timeMinutes / 60);
+                const mins = timeMinutes % 60;
+                return mins > 0 ? `${hours}h ${mins}m walk` : `${hours}h walk`;
+            }
+        }
+        
         // Create popup content
         function createPopup(props) {
             let distanceHtml = '';
             if (userLocation) {
                 const [lat, lng] = userLocation;
                 const dist = getDistance(lat, lng, props.lat, props.lng);
-                distanceHtml = `<div class="popup-distance">📏 ${dist.toFixed(2)} km away</div>`;
+                const walkTime = getWalkingTime(dist);
+                distanceHtml = `<div class="popup-distance">🚶 ${walkTime} (${dist.toFixed(2)} km)</div>`;
             }
             
             // Google Maps link - mobile-friendly format
