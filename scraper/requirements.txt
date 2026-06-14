@@ -1,0 +1,5 @@
+requests>=2.31
+beautifulsoup4>=4.12
+# Optional anti-bot fallback engine (only needed if you hit HTTP 403):
+#   pip install playwright && playwright install chromium
+# playwright>=1.44

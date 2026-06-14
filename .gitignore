@@ -32,6 +32,13 @@ count_restaurants.py
 count_jp.py
 create_icons.py
 
+# Scraper outputs / checkpoints (keep scraper/*.py and README tracked)
+scraper/tabelog_list*.json
+scraper/tabelog_full*.json
+scraper/debug_page.html
+scraper/.venv/
+final_restaurants_tabelog.json
+
 # Temporary files
 *.log
 .DS_Store
