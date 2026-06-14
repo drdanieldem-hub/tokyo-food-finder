@@ -1,12 +1,15 @@
-const CACHE_NAME = 'tokyo-food-finder-v7';
+const CACHE_NAME = 'tokyo-food-finder-v8';
 const urlsToCache = [
   '/tokyo-food-finder/',
   '/tokyo-food-finder/index.html',
   '/tokyo-food-finder/manifest.json',
+  '/tokyo-food-finder/icon-192.png',
+  '/tokyo-food-finder/icon-512.png',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-  'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png'
+  'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
+  'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css',
+  'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js'
 ];
 
 // Install event - cache assets
