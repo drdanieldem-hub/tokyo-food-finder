@@ -55,7 +55,43 @@ Outputs:
 - `tabelog_list.json` / `tabelog_list_flat.json` — stage 1
 - `tabelog_full.json` / `tabelog_full_flat.json` — stage 2 (with coordinates)
 
-## Feed it back into the map
+## Stage 3 (optional) — Google Places cross-reference
+
+Attaches a Google rating/review-count/place_id to each Tabelog restaurant and
+keeps only those at **Google ≥ 4.2** — giving the Tabelog 3.4+ ∩ Google 4.2+ set,
+written directly in `build.py`'s record shape.
+
+```bash
+export GOOGLE_PLACES_API_KEY=...            # never commit; .env is gitignored
+python google_crossref.py selftest          # offline sanity check
+python google_crossref.py tabelog_full_flat.json ../final_restaurants_merged.json --dry-run   # cost estimate
+python google_crossref.py tabelog_full_flat.json ../final_restaurants_merged.json --limit 20  # cheap test
+python google_crossref.py tabelog_full_flat.json ../final_restaurants_merged.json             # full run
+```
+
+- **One Google call per restaurant** (rating, reviews, coords, place_id all come
+  back from Text Search). Estimate ≈ **$0.032 each** → run `--dry-run` first to
+  see the total. Google's monthly free credit offsets part of it.
+- **Engines:** `--engine new` (Places API New, default) or `--engine legacy`
+  (classic Places API). New Google Cloud projects often have only one enabled —
+  if you get a permission error, switch engines or enable the other API.
+- **Resumable:** progress is cached in `<out>.cache.json`; re-running skips
+  done restaurants. Ctrl-C safe.
+- **Match quality:** when a restaurant has Tabelog coordinates, a Google hit more
+  than `--max-distance` metres away (default 400) is rejected as a mismatch.
+- Outputs the kept set to `<out>` and a `<out>_dropped.json` (low rating /
+  mismatch / not found / errors) for review.
+- Markers use the **Google** coordinates when available.
+
+Then regenerate the map — `build.py` already reads `final_restaurants_merged.json`:
+
+```bash
+cd .. && python build.py        # rebuilds index.html with the new data
+```
+
+## Feed it back into the map (Tabelog-only, no Google)
+
+If you're skipping the Google step:
 
 ```bash
 python to_map_format.py tabelog_full_flat.json ../final_restaurants_tabelog.json

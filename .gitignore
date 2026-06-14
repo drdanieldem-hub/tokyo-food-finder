@@ -37,6 +37,8 @@ scraper/tabelog_list*.json
 scraper/tabelog_full*.json
 scraper/debug_page.html
 scraper/.venv/
+*.cache.json
+final_restaurants_*_dropped.json
 final_restaurants_tabelog.json
 
 # Temporary files
