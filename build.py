@@ -69,6 +69,10 @@ def build_geojson(restaurants):
                 "place_id":       r.get("google_place_id", ""),
                 "lat":            r["lat"],
                 "lng":            r["lng"],
+                # Hours (only present if google_hours.py has run)
+                "regular_opening_hours": r.get("regular_opening_hours") or [],
+                "current_open_now":      r.get("current_open_now"),
+                "hours_source":          r.get("hours_source", ""),
             },
         }
         features.append(feat)
@@ -88,7 +92,11 @@ def category_counts(restaurants):
 
 def main():
     base = os.path.dirname(os.path.abspath(__file__))
-    data_path = os.path.join(base, "final_restaurants_merged.json")
+    # Prefer hours-enriched file if it exists, fall back to plain merged
+    for candidate in ("final_restaurants_with_hours.json", "final_restaurants_merged.json"):
+        data_path = os.path.join(base, candidate)
+        if os.path.exists(data_path):
+            break
     out_path  = os.path.join(base, "index.html")
 
     with open(data_path, encoding="utf-8") as f:
@@ -203,6 +211,26 @@ def build_html(geojson_str, counts_str, cats_str, total, top15_threshold):
         ".rating-chip:hover { opacity: .85; }\n"
         ".popup-meta { font-size: 0.82rem; line-height: 1.7; }\n"
         ".popup-meta span { display: block; }\n"
+        "/* Open/Closed badge */\n"
+        ".status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; }\n"
+        ".status-badge.open { background: #d1fae5; color: #065f46; }\n"
+        ".status-badge.closed { background: #e5e7eb; color: #4b5563; }\n"
+        ".status-badge.unknown { background: #fef3c7; color: #92400e; }\n"
+        "body.dark .status-badge.open { background: #064e3b; color: #6ee7b7; }\n"
+        "body.dark .status-badge.closed { background: #374151; color: #d1d5db; }\n"
+        "body.dark .status-badge.unknown { background: #78350f; color: #fcd34d; }\n"
+        "/* Hours table (collapsible) */\n"
+        ".hours-details { margin-top: 6px; font-size: 0.78rem; }\n"
+        ".hours-details summary { cursor: pointer; color: #3b82f6; font-weight: 600; user-select: none; padding: 2px 0; }\n"
+        ".hours-details summary:hover { text-decoration: underline; }\n"
+        ".hours-table { width: 100%; border-collapse: collapse; margin-top: 4px; }\n"
+        ".hours-table td { padding: 2px 4px; vertical-align: top; }\n"
+        ".hours-table td.day { color: #64748b; width: 70px; }\n"
+        "body.dark .hours-table td.day { color: #94a3b8; }\n"
+        ".hours-table tr.today td { font-weight: 700; color: #0f172a; }\n"
+        ".hours-table tr.today td.day { color: #3b82f6; }\n"
+        "body.dark .hours-table tr.today td { color: #f1f5f9; }\n"
+        ".hours-table tr.closed td { color: #94a3b8; }\n"
 
         "@media (max-width: 767px) {\n"
         "  #sidebar { position: fixed; top: 0; left: 0; height: 100%; transform: translateX(-100%); box-shadow: 2px 0 12px rgba(0,0,0,.2); }\n"
@@ -388,6 +416,29 @@ def build_html(geojson_str, counts_str, cats_str, total, top15_threshold):
         "  if (tabelog >= 3.7) return '#3b82f6';\n"
         "  return '#8b5cf6';\n"
         "}\n"
+        "function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;'); }\n"
+        "function formatHours(p) {\n"
+        "  if (!p.regular_opening_hours || p.regular_opening_hours.length !== 7) return '';\n"
+        "  var days = p.regular_opening_hours;\n"
+        "  var now = new Date();\n"
+        "  var todayIdx = now.getDay();  // 0=Sun\n"
+        "  var rows = '';\n"
+        "  days.forEach(function(d) {\n"
+        "    var cell;\n"
+        "    if (d.closed) { cell = 'Closed'; }\n"
+        "    else { cell = d.slots.map(function(s){ return s.open + '–' + (s.close || '24h'); }).join(', '); }\n"
+        "    var cls = 'closed ' + (d.closed ? 'closed' : '');\n"
+        "    if (d.day_idx === todayIdx) cls += ' today';\n"
+        "    rows += '<tr class=\"' + cls + '\"><td class=\"day\">' + d.day + '</td><td>' + escHtml(cell) + '</td></tr>';\n"
+        "  });\n"
+        "  return '<details class=\"hours-details\"><summary>🕒 Opening hours</summary>'\n"
+        "       + '<table class=\"hours-table\">' + rows + '</table></details>';\n"
+        "}\n"
+        "function statusBadge(p) {\n"
+        "  if (p.current_open_now === true)  return '<span class=\"status-badge open\">● Open now</span>';\n"
+        "  if (p.current_open_now === false) return '<span class=\"status-badge closed\">● Closed</span>';\n"
+        "  return '<span class=\"status-badge unknown\">● Hours unknown</span>';\n"
+        "}\n"
         "function makePopup(p) {\n"
         "  var nameJpPart = (p.name_jp && p.name_jp !== p.name)\n"
         "    ? '<div class=\"popup-name-jp\">' + escHtml(p.name_jp) + '</div>' : '';\n"
@@ -405,16 +456,15 @@ def build_html(geojson_str, counts_str, cats_str, total, top15_threshold):
         "       + '<div class=\"popup-ratings\">'\n"
         "       + '<a class=\"rating-chip tabelog\" href=\"' + tabelogSearch + '\" target=\"_blank\" rel=\"noopener\">📊 Tabelog: ' + p.tabelog_rating.toFixed(2) + '</a>'\n"
         "       + '<a class=\"rating-chip google\" href=\"' + gmapsUrl + '\" target=\"_blank\" rel=\"noopener\">⭐ Google: ' + p.google_rating.toFixed(1) + '</a>'\n"
+        "       + statusBadge(p)\n"
         "       + '</div>'\n"
         "       + '<div class=\"popup-meta\">'\n"
         "       + '<span>💬 ' + (p.google_reviews || 0).toLocaleString() + ' reviews</span>'\n"
         "       + '<span>🍽️ ' + escHtml(p.cuisine || 'N/A') + '</span>'\n"
         "       + '<span>📍 ' + escHtml(p.area || p.address || '') + '</span>'\n"
         "       + distHtml\n"
-        "       + '</div>';\n"
-        "}\n"
-        "function escHtml(s) {\n"
-        "  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');\n"
+        "       + '</div>'\n"
+        "       + formatHours(p);\n"
         "}\n"
         "\n"
         "// ── Pre-build markers array ────────────────────────────────────────────\n"

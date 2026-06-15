@@ -45,8 +45,11 @@ final_restaurants_tabelog.json
 *.log
 .DS_Store
 *.bak.*
+
+# Local-only scraper working files
+scraper/crossref_run.log
+scraper/hours_run.log
+scraper/details_*.log
+scraper/test_hours_*.json
 scraper/tabelog_for_crossref.json
 scraper/tabelog_355plus_*.json
-scraper/crossref_run.log
-scraper/details_*.json
-scraper/details_*.log
