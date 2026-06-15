@@ -479,16 +479,10 @@ function applyFilters() {
     }
     if (openNow) {
       var isOpen = isOpenAt(p);
-      // null = no hours data. Keep them visible during the day, but hide
-      // them after 21:00 JST since most restaurants without listed hours
-      // are tiny / irregular and are very likely closed at that hour.
-      if (isOpen === false) return;
-      if (isOpen === null) {
-        var t = getTokyoMinutesNow();
-        if (t.mins >= 21 * 60) return;
-      } else {
-        openMatched++;
-      }
+      // Open now: only show places with confirmed hours data. No hours =
+      // unknown = can't verify they're open, so hide them.
+      if (isOpen !== true) return;
+      openMatched++;
     }
     clusterGroup.addLayer(m);
     shown++;
