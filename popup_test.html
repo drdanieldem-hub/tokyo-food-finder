@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Popup test</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+body { font-family: -apple-system, sans-serif; margin: 20px; }
+h2 { color: #0f172a; }
+pre { background: #f1f5f9; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12px; }
+</style>
+</head>
+<body>
+<h2>Tokyo Food Finder — Popup Test Harness</h2>
+<p>This page extracts the <code>makePopup</code> logic from <code>index.html</code> and renders popups for 3 known restaurants, so you can see the rendered HTML without needing to drill into the live map.</p>
+<h3>1. 鮨 なんば 日比谷 (Namba) — closed, dinner Tue–Sat</h3>
+<div id="p1"></div>
+<h3>2. CHIUnE — closed, dinner Mon–Sat</h3>
+<div id="p2"></div>
+<h3>3. Old Imperial Bar — open now (Mon 00:28 JST), 11:30–00:00 daily</h3>
+<div id="p3"></div>
+<h3>4. SEZANNE — split lunch/dinner, complex schedule</h3>
+<div id="p4"></div>
+
+<script>
+fetch('index.html').then(r => r.text()).then(html => {
+  // Extract the GEOJSON and the makePopup function from the page's script
+  const scripts = html.match(/<script>([\s\S]+?)<\/script>/g) || [];
+  let geojson = null;
+  let script = null;
+  for (const s of scripts) {
+    const m = s.match(/var GEOJSON\s*=\s*(\{[\s\S]+?\});/);
+    if (m) { geojson = JSON.parse(m[1]); script = s; break; }
+  }
+  if (!geojson) { document.body.innerHTML += '<pre>No GEOJSON found</pre>'; return; }
+  // Pull the makePopup function bodies (statusBadge, formatHours) and execute them
+  // We extract and exec the relevant IIFE fragment
+  const popupCode = script.match(/function escHtml[\s\S]+?function makePopup[\s\S]+?return formatHours\(p\);\s*\}/);
+  if (!popupCode) { document.body.innerHTML += '<pre>Could not extract popup code</pre>'; return; }
+  // Run in a sandbox with `userLat = null` to skip distance line
+  const sandbox = new Function('userLat', 'userLng', popupCode[0] + '; return {makePopup, statusBadge, formatHours};');
+  const fns = sandbox(null, null);
+  window.makePopup = fns.makePopup;
+  // Render the 4 popups
+  const targets = [
+    {id: 'p1', name: '鮨 なんば 日比谷'},
+    {id: 'p2', name: 'CHIUnE'},
+    {id: 'p3', name: 'Old Imperial Bar'},
+    {id: 'p4', name: 'SEZANNE'},
+  ];
+  for (const t of targets) {
+    const f = geojson.features.find(f => f.properties.name && f.properties.name.startsWith(t.name));
+    if (!f) { document.getElementById(t.id).innerHTML = `<pre>Not found: ${t.name}</pre>`; continue; }
+    const html = makePopup(f.properties);
+    document.getElementById(t.id).innerHTML = `
+      <div class="leaflet-popup-content-wrapper" style="background:#fff; padding:10px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.15); max-width:400px; margin-bottom:20px;">
+        ${html}
+      </div>
+      <pre>${html.replace(/</g, '&lt;')}</pre>
+    `;
+  }
+});
+</script>
+</body></html>
