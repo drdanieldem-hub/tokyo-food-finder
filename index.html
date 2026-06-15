@@ -386,6 +386,13 @@ function formatHours(p) {
        + '</details>';
 }
 function statusBadge(p) {
+  // Prefer the live isOpenAt computation (uses current Asia/Tokyo time and the
+  // parsed regular_opening_hours) so the badge is always accurate, even if the
+  // scraped current_open_now field is stale. Fall back to the scraped value
+  // only if no regular hours are available.
+  var live = isOpenAt(p);
+  if (live === true)  return '<span class="status-badge open">● Open now</span>';
+  if (live === false) return '<span class="status-badge closed">● Closed</span>';
   if (p.current_open_now === true)  return '<span class="status-badge open">● Open now</span>';
   if (p.current_open_now === false) return '<span class="status-badge closed">● Closed</span>';
   return '<span class="status-badge unknown">● Hours unknown</span>';
