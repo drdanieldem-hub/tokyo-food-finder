@@ -67,13 +67,17 @@ body.dark #legend { background: #1e293b; color: #e2e8f0; }
 .popup-meta { font-size: 0.82rem; line-height: 1.7; }
 .popup-meta span { display: block; }
 /* Open/Closed badge */
-.status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; }
-.status-badge.open { background: #d1fae5; color: #065f46; }
-.status-badge.closed { background: #e5e7eb; color: #4b5563; }
-.status-badge.unknown { background: #fef3c7; color: #92400e; }
-body.dark .status-badge.open { background: #064e3b; color: #6ee7b7; }
-body.dark .status-badge.closed { background: #374151; color: #d1d5db; }
-body.dark .status-badge.unknown { background: #78350f; color: #fcd34d; }
+.popup-status-row { margin-bottom: 8px; }
+.status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 14px; font-size: 0.85rem; font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.status-badge.open { background: #10b981; color: #fff; }
+.status-badge.closed { background: #6b7280; color: #fff; }
+.status-badge.unknown { background: #f59e0b; color: #fff; }
+body.dark .status-badge.open { background: #059669; color: #d1fae5; }
+body.dark .status-badge.closed { background: #4b5563; color: #e5e7eb; }
+body.dark .status-badge.unknown { background: #d97706; color: #fef3c7; }
+/* Next opening hint */
+.next-opening { font-size: 0.78rem; color: #64748b; margin-top: 8px; margin-bottom: 2px; font-weight: 600; }
+body.dark .next-opening { color: #cbd5e1; }
 /* Hours table (collapsible) */
 .hours-details { margin-top: 6px; font-size: 0.78rem; }
 .hours-details summary { cursor: pointer; color: #3b82f6; font-weight: 600; user-select: none; padding: 2px 0; }
@@ -259,22 +263,59 @@ function markerColor(tabelog) {
   return '#8b5cf6';
 }
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Render a single slot range: "17:00–23:00" or "11:30–14:30, 17:30–22:00"
+function slotLabel(slots) { return slots.map(function(s){ return s.open + '–' + (s.close || '24h'); }).join(', '); }
+// Find the next opening from now. Returns string like "Tue 17:00" or null if open right now or unknown.
+function nextOpening(p) {
+  if (p.current_open_now === true) return null;
+  var days = p.regular_opening_hours;
+  if (!days || days.length !== 7) return null;
+  var now = new Date();
+  // Use Tokyo time for the comparison
+  var tokyo = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+  var startDay = tokyo.getDay();
+  var startMin = tokyo.getHours() * 60 + tokyo.getMinutes();
+  // Check today first (only slots that haven't ended)
+  var today = days[startDay];
+  if (today && !today.closed) {
+    for (var i = 0; i < today.slots.length; i++) {
+      var s = today.slots[i];
+      var oh = parseInt(s.open.split(':')[0]); var om = parseInt(s.open.split(':')[1]);
+      var openMin = oh * 60 + om;
+      if (openMin > startMin) return 'today at ' + s.open;
+    }
+  }
+  // Look ahead up to 7 days
+  for (var d = 1; d <= 7; d++) {
+    var idx = (startDay + d) % 7;
+    var day = days[idx];
+    if (day && !day.closed && day.slots.length) {
+      var prefix = d === 1 ? 'tomorrow' : day.day;
+      return prefix + ' at ' + day.slots[0].open;
+    }
+  }
+  return null;
+}
 function formatHours(p) {
   if (!p.regular_opening_hours || p.regular_opening_hours.length !== 7) return '';
   var days = p.regular_opening_hours;
   var now = new Date();
-  var todayIdx = now.getDay();  // 0=Sun
+  var todayIdx = now.getDay();
   var rows = '';
   days.forEach(function(d) {
-    var cell;
-    if (d.closed) { cell = 'Closed'; }
-    else { cell = d.slots.map(function(s){ return s.open + '–' + (s.close || '24h'); }).join(', '); }
-    var cls = 'closed ' + (d.closed ? 'closed' : '');
+    var cell = d.closed ? 'Closed' : slotLabel(d.slots);
+    var cls = d.closed ? 'closed' : '';
     if (d.day_idx === todayIdx) cls += ' today';
     rows += '<tr class="' + cls + '"><td class="day">' + d.day + '</td><td>' + escHtml(cell) + '</td></tr>';
   });
-  return '<details class="hours-details"><summary>🕒 Opening hours</summary>'
-       + '<table class="hours-table">' + rows + '</table></details>';
+  // Auto-expand the details so hours are visible on first open
+  var next = nextOpening(p);
+  var nextHtml = next ? '<div class="next-opening">Next: ' + escHtml(next) + '</div>' : '';
+  return nextHtml
+       + '<details class="hours-details" open>'
+       +   '<summary>🕒 Opening hours</summary>'
+       +   '<table class="hours-table">' + rows + '</table>'
+       + '</details>';
 }
 function statusBadge(p) {
   if (p.current_open_now === true)  return '<span class="status-badge open">● Open now</span>';
@@ -298,8 +339,8 @@ function makePopup(p) {
        + '<div class="popup-ratings">'
        + '<a class="rating-chip tabelog" href="' + tabelogSearch + '" target="_blank" rel="noopener">📊 Tabelog: ' + p.tabelog_rating.toFixed(2) + '</a>'
        + '<a class="rating-chip google" href="' + gmapsUrl + '" target="_blank" rel="noopener">⭐ Google: ' + p.google_rating.toFixed(1) + '</a>'
-       + statusBadge(p)
        + '</div>'
+       + '<div class="popup-status-row">' + statusBadge(p) + '</div>'
        + '<div class="popup-meta">'
        + '<span>💬 ' + (p.google_reviews || 0).toLocaleString() + ' reviews</span>'
        + '<span>🍽️ ' + escHtml(p.cuisine || 'N/A') + '</span>'
