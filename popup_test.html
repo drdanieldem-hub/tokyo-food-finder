@@ -1,61 +1,77 @@
 <!DOCTYPE html>
 <html><head><meta charset="UTF-8"><title>Popup test</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-body { font-family: -apple-system, sans-serif; margin: 20px; }
+body { font-family: -apple-system, system-ui, sans-serif; margin: 20px; background: #f8fafc; }
 h2 { color: #0f172a; }
-pre { background: #f1f5f9; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12px; }
+h3 { color: #1e40af; margin-top: 32px; }
+.popup { background: #fff; padding: 12px 14px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.15); max-width: 320px; margin-bottom: 8px; }
+.popup-title { font-size: 1rem; font-weight: 700; margin-bottom: 2px; }
+.popup-name-jp { font-size: 0.8rem; color: #64748b; margin-bottom: 8px; }
+.popup-ratings { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.rating-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; text-decoration: none; }
+.rating-chip.tabelog { background: #fef3c7; color: #92400e; }
+.rating-chip.google { background: #dbeafe; color: #1e40af; }
+.status-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 12px; font-size: 0.78rem; font-weight: 600; }
+.status-badge.open { background: #d1fae5; color: #065f46; }
+.status-badge.closed { background: #e5e7eb; color: #4b5563; }
+.status-badge.unknown { background: #fef3c7; color: #92400e; }
+.popup-meta { font-size: 0.82rem; line-height: 1.7; }
+.popup-meta span { display: block; }
+.hours-details { margin-top: 6px; font-size: 0.78rem; }
+.hours-details summary { cursor: pointer; color: #3b82f6; font-weight: 600; user-select: none; padding: 2px 0; }
+.hours-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.hours-table td { padding: 2px 4px; vertical-align: top; }
+.hours-table td.day { color: #64748b; width: 70px; }
+.hours-table tr.today td { font-weight: 700; color: #0f172a; }
+.hours-table tr.today td.day { color: #3b82f6; }
+.hours-table tr.closed td { color: #94a3b8; }
 </style>
 </head>
 <body>
-<h2>Tokyo Food Finder — Popup Test Harness</h2>
-<p>This page extracts the <code>makePopup</code> logic from <code>index.html</code> and renders popups for 3 known restaurants, so you can see the rendered HTML without needing to drill into the live map.</p>
-<h3>1. 鮨 なんば 日比谷 (Namba) — closed, dinner Tue–Sat</h3>
-<div id="p1"></div>
-<h3>2. CHIUnE — closed, dinner Mon–Sat</h3>
-<div id="p2"></div>
-<h3>3. Old Imperial Bar — open now (Mon 00:28 JST), 11:30–00:00 daily</h3>
-<div id="p3"></div>
-<h3>4. SEZANNE — split lunch/dinner, complex schedule</h3>
-<div id="p4"></div>
+<h2>Tokyo Food Finder — Live popup render</h2>
+<p>Renders the actual popup HTML the map shows, extracted from <code>index.html</code>.</p>
+<div id="out"></div>
 
 <script>
-fetch('index.html').then(r => r.text()).then(html => {
-  // Extract the GEOJSON and the makePopup function from the page's script
-  const scripts = html.match(/<script>([\s\S]+?)<\/script>/g) || [];
-  let geojson = null;
-  let script = null;
-  for (const s of scripts) {
-    const m = s.match(/var GEOJSON\s*=\s*(\{[\s\S]+?\});/);
-    if (m) { geojson = JSON.parse(m[1]); script = s; break; }
+async function main() {
+  const out = document.getElementById('out');
+  try {
+    const r = await fetch('index.html');
+    if (!r.ok) { out.innerHTML = `<pre>Fetch failed: ${r.status}</pre>`; return; }
+    const html = await r.text();
+    // Extract GEOJSON
+    const m = html.match(/var GEOJSON\s*=\s*(\{[\s\S]+?\});/);
+    if (!m) { out.innerHTML = '<pre>No GEOJSON</pre>'; return; }
+    const g = JSON.parse(m[1]);
+    // Extract popup code block
+    const codeMatch = html.match(/function escHtml[\s\S]+?function makePopup[\s\S]+?return formatHours\(p\);\s*\}/);
+    if (!codeMatch) { out.innerHTML = '<pre>No popup code</pre>'; return; }
+    // Run in a sandbox where userLat/userLng/haversine/walkTime are provided as no-ops
+    const sandbox = new Function('userLat', 'userLng', 'haversine', 'walkTime',
+      codeMatch[0] + '; return {makePopup};');
+    const fns = sandbox(null, null, () => 0, () => '');
+    const { makePopup } = fns;
+
+    // Find 4 interesting places
+    const targets = [
+      {label: 'Old Imperial Bar (open now)', name: 'Old Imperial Bar'},
+      {label: '鮨 なんば 日比谷 (Namba, closed, dinner Tue–Sat)', name: '鮨 なんば 日比谷'},
+      {label: 'CHIUnE (closed, dinner Mon–Sat)', name: 'CHIUnE'},
+      {label: 'SEZANNE (split lunch/dinner)', name: 'SEZANNE'},
+      {label: 'レ セゾン (Le Saison, all-day two sittings)', name: 'レ セゾン'},
+    ];
+    let html2 = '';
+    for (const t of targets) {
+      const f = g.features.find(f => f.properties.name === t.name || f.properties.name.startsWith(t.name));
+      if (!f) { html2 += `<h3>${t.label}</h3><pre>not found</pre>`; continue; }
+      const popup = makePopup(f.properties);
+      html2 += `<h3>${t.label}</h3><div class="popup">${popup}</div>`;
+    }
+    out.innerHTML = html2;
+  } catch (e) {
+    out.innerHTML = `<pre>Error: ${e.message}\n${e.stack}</pre>`;
   }
-  if (!geojson) { document.body.innerHTML += '<pre>No GEOJSON found</pre>'; return; }
-  // Pull the makePopup function bodies (statusBadge, formatHours) and execute them
-  // We extract and exec the relevant IIFE fragment
-  const popupCode = script.match(/function escHtml[\s\S]+?function makePopup[\s\S]+?return formatHours\(p\);\s*\}/);
-  if (!popupCode) { document.body.innerHTML += '<pre>Could not extract popup code</pre>'; return; }
-  // Run in a sandbox with `userLat = null` to skip distance line
-  const sandbox = new Function('userLat', 'userLng', popupCode[0] + '; return {makePopup, statusBadge, formatHours};');
-  const fns = sandbox(null, null);
-  window.makePopup = fns.makePopup;
-  // Render the 4 popups
-  const targets = [
-    {id: 'p1', name: '鮨 なんば 日比谷'},
-    {id: 'p2', name: 'CHIUnE'},
-    {id: 'p3', name: 'Old Imperial Bar'},
-    {id: 'p4', name: 'SEZANNE'},
-  ];
-  for (const t of targets) {
-    const f = geojson.features.find(f => f.properties.name && f.properties.name.startsWith(t.name));
-    if (!f) { document.getElementById(t.id).innerHTML = `<pre>Not found: ${t.name}</pre>`; continue; }
-    const html = makePopup(f.properties);
-    document.getElementById(t.id).innerHTML = `
-      <div class="leaflet-popup-content-wrapper" style="background:#fff; padding:10px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,.15); max-width:400px; margin-bottom:20px;">
-        ${html}
-      </div>
-      <pre>${html.replace(/</g, '&lt;')}</pre>
-    `;
-  }
-});
+}
+main();
 </script>
 </body></html>
