@@ -44,3 +44,9 @@ final_restaurants_tabelog.json
 # Temporary files
 *.log
 .DS_Store
+*.bak.*
+scraper/tabelog_for_crossref.json
+scraper/tabelog_355plus_*.json
+scraper/crossref_run.log
+scraper/details_*.json
+scraper/details_*.log
