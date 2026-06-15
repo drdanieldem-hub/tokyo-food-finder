@@ -42,6 +42,12 @@ body.dark select, body.dark input[type=text] { background: #0f172a; border-color
 .cat-count { color: #94a3b8; font-size: 0.75rem; margin-left: auto; }
 #top-picks-label { display: flex; align-items: center; gap: 7px; font-size: 0.88rem; cursor: pointer; }
 #top-picks-label input { accent-color: #10b981; width: 15px; height: 15px; }
+#open-now-label { display: flex; align-items: center; gap: 7px; font-size: 0.88rem; cursor: pointer; }
+#open-now-label input { accent-color: #10b981; width: 15px; height: 15px; }
+.japan-time { font-size: 0.74rem; color: #64748b; margin-top: 4px; padding-left: 22px; font-variant-numeric: tabular-nums; }
+body.dark .japan-time { color: #94a3b8; }
+.japan-time.live { color: #10b981; font-weight: 600; }
+body.dark .japan-time.live { color: #34d399; }
 button.reset-btn { width: 100%; padding: 8px; border: 1px solid #10b981; background: transparent; color: #10b981; border-radius: 8px; cursor: pointer; font-size: 0.85rem; margin-top: 8px; }
 button.reset-btn:hover { background: #10b981; color: #fff; }
 body.dark button.reset-btn { border-color: #34d399; color: #34d399; }
@@ -146,10 +152,18 @@ body.dark .hours-table tr.today td { color: #f1f5f9; }
         <input type="text" id="area-search" placeholder="e.g. Shinjuku, Ginza...">
       </div>
       <div class="filter-section">
+        <label id="open-now-label">
+          <input type="checkbox" id="open-now"> 🕒 Open now (Japan)
+        </label>
+        <div class="japan-time" id="japan-time">—</div>
+      </div>
+
+      <div class="filter-section">
         <label id="top-picks-label">
           <input type="checkbox" id="top-picks"> ⭐ Top picks only
         </label>
       </div>
+
       <button class="reset-btn" id="reset-filters">Reset Filters</button>
     </div>
   </div>
@@ -267,25 +281,79 @@ function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'
 function slotLabel(slots) { return slots.map(function(s){ return s.open + '–' + (s.close || '24h'); }).join(', '); }
 // Find the next opening from now. Returns string like "Tue 17:00" or null if open right now or unknown.
 function nextOpening(p) {
+  var now = getTokyoDate();
+  return _nextOpeningFrom(p, now);
+}
+// Pure Asia/Tokyo time helpers. _TokyoDate is the wall-clock time in Tokyo,
+// used by every open/close check so the filter is synced with the actual
+// time of day in Japan regardless of where the user is.
+function getTokyoDate() {
+  // Trick: format the local Date as a string in Tokyo TZ, then re-parse it.
+  // This gives a Date object whose getHours()/getDay() reflect Tokyo wall time.
+  var s = new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' });
+  return new Date(s);
+}
+function getTokyoMinutesNow() {
+  // More accurate minutes-since-midnight using Intl (no DST in Tokyo, safe).
+  var parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Tokyo', hour12: false,
+    hour: '2-digit', minute: '2-digit', weekday: 'short'
+  }).formatToParts(new Date());
+  var h = 0, m = 0, weekday = 0;
+  for (var i = 0; i < parts.length; i++) {
+    if (parts[i].type === 'hour') h = parseInt(parts[i].value, 10) % 24;
+    if (parts[i].type === 'minute') m = parseInt(parts[i].value, 10);
+    if (parts[i].type === 'weekday') {
+      weekday = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(parts[i].value);
+    }
+  }
+  return { mins: h * 60 + m, dayIdx: weekday };
+}
+// Is the restaurant open at the given Tokyo time? Returns:
+//   true  → has a slot covering the current minute on the current day
+//   false → explicit closed status, or no slot covering now
+//   null  → no hours data available (don't filter)
+function isOpenAt(p) {
+  var days = p.regular_opening_hours;
+  if (!days || days.length !== 7) return null;
+  var t = getTokyoMinutesNow();
+  var day = days[t.dayIdx];
+  if (!day || day.closed) return false;
+  for (var i = 0; i < day.slots.length; i++) {
+    var s = day.slots[i];
+    var oh = parseInt(s.open.split(':')[0]);
+    var om = parseInt(s.open.split(':')[1]);
+    var openMin = oh * 60 + om;
+    var closeMin;
+    if (!s.close) {
+      // "24h" → treat as open through end of day
+      closeMin = 24 * 60;
+    } else {
+      var ch = parseInt(s.close.split(':')[0]);
+      var cm = parseInt(s.close.split(':')[1]);
+      closeMin = ch * 60 + cm;
+      // If close <= open, assume it crosses midnight → extend past midnight
+      if (closeMin <= openMin) closeMin = 24 * 60;
+    }
+    if (t.mins >= openMin && t.mins < closeMin) return true;
+  }
+  return false;
+}
+// Body of the old nextOpening, parameterized over the input date.
+function _nextOpeningFrom(p, tokyo) {
   if (p.current_open_now === true) return null;
   var days = p.regular_opening_hours;
   if (!days || days.length !== 7) return null;
-  var now = new Date();
-  // Use Tokyo time for the comparison
-  var tokyo = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
   var startDay = tokyo.getDay();
   var startMin = tokyo.getHours() * 60 + tokyo.getMinutes();
-  // Check today first (only slots that haven't ended)
   var today = days[startDay];
   if (today && !today.closed) {
     for (var i = 0; i < today.slots.length; i++) {
       var s = today.slots[i];
-      var oh = parseInt(s.open.split(':')[0]); var om = parseInt(s.open.split(':')[1]);
-      var openMin = oh * 60 + om;
+      var openMin = parseInt(s.open.split(':')[0]) * 60 + parseInt(s.open.split(':')[1]);
       if (openMin > startMin) return 'today at ' + s.open;
     }
   }
-  // Look ahead up to 7 days
   for (var d = 1; d <= 7; d++) {
     var idx = (startDay + d) % 7;
     var day = days[idx];
@@ -378,12 +446,13 @@ function applyFilters() {
   var rMin   = parseInt(document.getElementById('reviews-min').value, 10);
   var areaQ  = document.getElementById('area-search').value.trim().toLowerCase();
   var topOnly= document.getElementById('top-picks').checked;
+  var openNow= document.getElementById('open-now').checked;
   var checkedCats = [];
   document.querySelectorAll('.cat-cb:checked').forEach(function(cb) {
     checkedCats.push(cb.value);
   });
   clusterGroup.clearLayers();
-  var shown = 0;
+  var shown = 0, openMatched = 0;
   allMarkers.forEach(function(m) {
     var p = m._foodProps;
     if (p.tabelog_rating < tMin) return;
@@ -401,12 +470,21 @@ function applyFilters() {
       var score = (p.tabelog_rating / 4.71) * 0.5 + (p.google_rating / 5.0) * 0.5;
       if (score < TOP15_THRESHOLD) return;
     }
+    if (openNow) {
+      var isOpen = isOpenAt(p);
+      // null = no hours data → keep visible (don't hide what we can't verify)
+      if (isOpen === false) return;
+      if (isOpen === true) openMatched++;
+    }
     clusterGroup.addLayer(m);
     shown++;
   });
-  document.getElementById('stats-line').textContent =
-    shown.toLocaleString() + ' Restaurants' + (shown < TOTAL ? ' (filtered)' : '') +
+  var line = shown.toLocaleString() + ' Restaurants' + (shown < TOTAL ? ' (filtered)' : '') +
     ' \u2022 Tabelog 3.4+ \u2229 Google 4.2+';
+  if (openNow) {
+    line += ' \u2022 ' + openMatched.toLocaleString() + ' open now';
+  }
+  document.getElementById('stats-line').textContent = line;
 }
 applyFilters();
 
@@ -416,6 +494,7 @@ applyFilters();
 });
 document.getElementById('area-search').addEventListener('input', applyFilters);
 document.getElementById('top-picks').addEventListener('change', applyFilters);
+document.getElementById('open-now').addEventListener('change', applyFilters);
 
 document.getElementById('reset-filters').addEventListener('click', function() {
   document.getElementById('tabelog-min').value = '3.4';
@@ -423,9 +502,28 @@ document.getElementById('reset-filters').addEventListener('click', function() {
   document.getElementById('reviews-min').value = '0';
   document.getElementById('area-search').value = '';
   document.getElementById('top-picks').checked  = false;
+  document.getElementById('open-now').checked   = false;
   document.querySelectorAll('.cat-cb').forEach(function(cb) { cb.checked = false; });
   applyFilters();
 });
+
+// ── Live Japan time ticker (re-evaluates open-now filter every minute) ──
+var jtEl = document.getElementById('japan-time');
+var JST_WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function updateJapanTime() {
+  var t = getTokyoMinutesNow();
+  var h = Math.floor(t.mins / 60), m = t.mins % 60;
+  var hh = h < 10 ? '0' + h : '' + h;
+  var mm = m < 10 ? '0' + m : '' + m;
+  jtEl.textContent = 'Japan ' + JST_WEEKDAYS[t.dayIdx] + ' ' + hh + ':' + mm;
+  jtEl.classList.add('live');
+}
+updateJapanTime();
+// Re-render every 30 seconds so the filter stays in sync as time ticks over.
+setInterval(function() {
+  updateJapanTime();
+  if (document.getElementById('open-now').checked) applyFilters();
+}, 30000);
 
 // ── Sidebar toggle (mobile) ───────────────────────────────────────────
 var sidebar = document.getElementById('sidebar');
