@@ -550,17 +550,16 @@ document.getElementById('map').addEventListener('click', function() {
 var gpsBtn       = document.getElementById('gps-btn');
 var gpsWatchId   = null;
 var userMarker   = null;
-gpsBtn.addEventListener('click', function() {
-  if (gpsWatchId !== null) {
-    navigator.geolocation.clearWatch(gpsWatchId);
-    gpsWatchId = null;
-    if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
-    userLat = null; userLng = null;
-    gpsBtn.classList.remove('active');
+var firstFix     = true;  // only auto-pan to user on the first fix
+
+function startGps() {
+  if (gpsWatchId !== null) return;  // already watching
+  if (!navigator.geolocation) {
+    if (gpsBtn) gpsBtn.classList.remove('active');
     return;
   }
-  if (!navigator.geolocation) { alert('Geolocation not supported.'); return; }
-  gpsBtn.classList.add('active');
+  if (gpsBtn) gpsBtn.classList.add('active');
+  firstFix = true;
   gpsWatchId = navigator.geolocation.watchPosition(function(pos) {
     userLat = pos.coords.latitude;
     userLng = pos.coords.longitude;
@@ -568,12 +567,53 @@ gpsBtn.addEventListener('click', function() {
     userMarker = L.circleMarker([userLat, userLng], {
       radius: 9, fillColor: '#ef4444', color: '#fff', weight: 2, fillOpacity: 1
     }).addTo(map);
-    map.setView([userLat, userLng], 15);
-  }, function() {
-    alert('Unable to retrieve location.');
+    // Pan/zoom to user only on the first fix. After that, the user is in
+    // control of the map view and we just keep the dot updated.
+    if (firstFix) {
+      map.setView([userLat, userLng], 15);
+      firstFix = false;
+    }
+  }, function(err) {
+    // Permission denied / unavailable / timeout. Be quiet on auto-start
+    // (user didn't ask for it), only alert on explicit button press.
+    if (gpsBtn) gpsBtn.classList.remove('active');
+    if (gpsBtn && gpsBtn.dataset.manual === '1') {
+      var msg = err && err.code === 1
+        ? 'Location permission denied.'
+        : 'Unable to retrieve location.';
+      alert(msg);
+    }
+    gpsWatchId = null;
+  }, { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 });
+}
+
+function stopGps() {
+  if (gpsWatchId !== null) {
+    navigator.geolocation.clearWatch(gpsWatchId);
+    gpsWatchId = null;
+  }
+  if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+  userLat = null; userLng = null;
+  if (gpsBtn) {
     gpsBtn.classList.remove('active');
-  }, { enableHighAccuracy: true });
+    gpsBtn.dataset.manual = '0';
+  }
+}
+
+gpsBtn.addEventListener('click', function() {
+  if (gpsWatchId !== null) { stopGps(); return; }
+  gpsBtn.dataset.manual = '1';
+  startGps();
 });
+
+// Auto-start GPS on page load. Brief delay so the map finishes laying
+// out before we ask the browser for the prompt. Permission state is
+// checked silently. If it was previously denied, the browser handles
+// this without a popup and the error callback above stays quiet.
+setTimeout(function() {
+  if (gpsBtn) gpsBtn.dataset.manual = '0';
+  startGps();
+}, 800);
 
 // ── Service Worker ────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
